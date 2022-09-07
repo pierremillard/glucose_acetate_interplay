@@ -36,11 +36,11 @@ library(CoRC)
 CoRC::getCopasi()
 ```
 
-Additional information on CoRC installation and usage are available from the CoRC repository (https://github.com/jpahle/CoRC) an in the associated publication (Föster et al., Bioinformatics, 2021, doi: [10.1093/bioinformatics/btab033](https://doi.org/10.1093/bioinformatics/btab033)).
+Additional information on CoRC installation and usage are available from the CoRC repository (https://github.com/jpahle/CoRC) and the associated publication (Föster et al., Bioinformatics, 2021, doi: [10.1093/bioinformatics/btab033](https://doi.org/10.1093/bioinformatics/btab033)).
 
 ## Usage
 
-To run all analyses detailed in the publication and reproduce Figures 1-4, 6, and 7:
+To run all analyses detailed in the publication and reproduce Figures 1-4, 6 and 7:
 
 - download the [GitHub repository tarball](https://github.com/pierremillard/glucose_acetate_interplay/archive/refs/heads/master.zip) and unpack it somewhere on your disk
 
