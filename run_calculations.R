@@ -132,14 +132,14 @@ pdf(file="Figure_1D.pdf", width = 5, height = 4)
 dev.off()
 
 
-##########################################################################################
-# GLYCOLYTIC CONTROL OF THE ACETATE FLUX, IN ABSENCE OR PRESENCE OF ACETATE (30 mM)      #
-##########################################################################################
-# Outputs:                                                                               #
-#   - Data_Figure_2.txt: All data, including the total carbon uptake flux (qGLC+qACE)    #
-#                        and the total carbon uptake flux (qACE/(qGLC+qACE))             #
-#   - Figure_2.pdf:      Fig. 2                                                          #
-##########################################################################################
+##############################################################################################
+# GLYCOLYTIC CONTROL OF THE ACETATE FLUX, IN ABSENCE OR PRESENCE OF ACETATE (30 mM)          #
+##############################################################################################
+# Outputs:                                                                                   #
+#   - Data_Figure_2.txt: All data, including the total carbon uptake flux (qGLC+qACE)        #
+#                        and the contribution of acetate to carbon uptake (qACE/(qGLC+qACE)) #
+#   - Figure_2.pdf:      Fig. 2                                                              #
+##############################################################################################
 
 # load experimental data
 
@@ -259,12 +259,12 @@ pdf(file = "Figure_2.pdf", width = 6.3, height = 8.1)
 dev.off()
 
 
-##########################################################################################################################
-# DETERMINATION OF ACETATE THRESHOLD CONCENTRATION AT WHICH THE ACETATE FLUX SWITCHES BETWEEN CONSUMPTION AND PRODUCTION #
-##########################################################################################################################
-# Output:                                                                                                                #
-#   - Figure_3.pdf:      Fig. 3                                                                                          #
-##########################################################################################################################
+###########################################################################################
+# DETERMINATION OF THE ACETATE THRESHOLD CONCENTRATION AT WHICH THE ACETATE FLUX REVERSES #
+###########################################################################################
+# Output:                                                                                 #
+#   - Figure_3.pdf:      Fig. 3                                                           #
+###########################################################################################
 
 # load experimental data
 
