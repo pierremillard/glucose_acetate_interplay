@@ -66,6 +66,10 @@ source("run_calculations.R")
 
 All results will be saved in the `./results/` directory.
 
+## Questions
+If you have any question, please open a new *issue*
+to [our GitHub issue tracker](https://github.com/MetaSys-LISBP/glucose_acetate_interplay/issues) so we could discuss together. 
+
 ## How to cite
 Millard P., Uttenweiler-Joseph S., Enjalbert B. From toxic waste to beneficial nutrient: acetate boosts *Escherichia coli* growth at low glycolytic flux. bioRxiv, 2022, doi: [doi](https://doi.org/doi)
 
