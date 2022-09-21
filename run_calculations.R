@@ -6,7 +6,7 @@
 #
 #   From toxic waste to beneficial nutrient: acetate boosts Escherichia coli growth at low glycolytic flux.
 #   P. Millard, S. Uttenweiler-Joseph, B. Enjalbert
-#   bioRxiv preprint, doi: XXX
+#   bioRxiv preprint, doi: 10.1101/2022.09.20.506926
 #
 # All scripts are available at https://github.com/MetaSys-LISBP/glucose_acetate_interplay
 #
