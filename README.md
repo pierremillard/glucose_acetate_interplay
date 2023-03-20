@@ -12,7 +12,7 @@ The model is available in COPASI format in the `./model/` directory, and in SBML
 
 Details on the calculations can be found in the [original publication](https://doi.org/10.1101/2022.09.20.506926) and in the Rmd notebook.
 
-We distribute an HTML file showing the [notebook’s output after execution](https://htmlpreview.github.io/?https://github.com/MetaSys-LISBP/glucose_acetate_interplay/blob/main/notebook.html)
+We distribute an HTML file showing the [notebook’s output after execution](https://htmlpreview.github.io/?https://github.com/MetaSys-LISBP/glucose_acetate_interplay/blob/master/notebook.html)
 
 The code is open-source and available under [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.txt).
 
