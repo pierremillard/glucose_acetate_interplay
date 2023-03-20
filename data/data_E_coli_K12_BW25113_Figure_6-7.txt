@@ -71,3 +71,15 @@ E_coli_K12_BW25113	delta_pta	galactose	13	0	0	0.2643
 E_coli_K12_BW25113	delta_pta	galactose	13	0	10	0.2369
 E_coli_K12_BW25113	delta_pta	galactose	14	0	0	0.2556
 E_coli_K12_BW25113	delta_pta	galactose	14	0	10	0.2389
+E_coli_K12_BW25113	delta_pgi	glucose	19	0	0	0.2117
+E_coli_K12_BW25113	delta_pgi	glucose	19	0	10	0.2925
+E_coli_K12_BW25113	delta_pfkA	glucose	19	0	0	0.0739
+E_coli_K12_BW25113	delta_pfkA	glucose	19	0	10	0.143
+E_coli_K12_BW25113	delta_pgi	glucose	20	0	0	0.1793
+E_coli_K12_BW25113	delta_pgi	glucose	20	0	10	0.2991
+E_coli_K12_BW25113	delta_pfkA	glucose	20	0	0	0.0706
+E_coli_K12_BW25113	delta_pfkA	glucose	20	0	10	0.1658
+E_coli_K12_BW25113	delta_pgi	glucose	21	0	0	0.1816
+E_coli_K12_BW25113	delta_pgi	glucose	21	0	10	0.3156
+E_coli_K12_BW25113	delta_pfkA	glucose	21	0	0	0.0758
+E_coli_K12_BW25113	delta_pfkA	glucose	21	0	10	0.1691

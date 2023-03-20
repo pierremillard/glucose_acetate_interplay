@@ -3,10 +3,10 @@
 # load dependencies
 
 library(RColorBrewer)
-library(gplots)
 library(CoRC)
 library(pso)
 library(optimx)
+library(colorspace)
 
 
 # polynomial fit
@@ -28,7 +28,7 @@ cost <- function(par, x, ace, func){
   if (anyNA(xpred)){
     xpred <- rep(1e10, length(x))
   }
-  res <- (xpred - x)**2
+  res <- ((xpred - x)/0.1)**2
   return(sum(res))
 }
 
@@ -39,13 +39,17 @@ sim_sigmoid <- function(par, ace){
   return(xpred)
 }
 
-fit_sigmoid <- function(x_val, y_val, par_ini_weibull, lower_sigmoid, upper_sigmoid){
+fit_sigmoid <- function(x_val, y_val, par_ini_sigmoid, lower_sigmoid, upper_sigmoid){
   ord <- order(x_val)
   x <- y_val[ord]
   ace <- x_val[ord]
   ace <- ace[!is.na(x)]
   x <- x[!is.na(x)]
-  res_fit <- psoptim(par=par_ini_sigmoid, fn=cost, x=x, ace=ace, func=sim_sigmoid, lower=lower_sigmoid, upper=upper_sigmoid, control = list(maxit=100000, abstol=1e-6, trace.stats=TRUE))
+  res_fit <- psoptim(par=par_ini_sigmoid, fn=cost, x=x, ace=ace, func=sim_sigmoid, lower=lower_sigmoid, upper=upper_sigmoid, control = list(maxit=20000, abstol=1e-6, trace.stats=TRUE))
+  
+  res_stats <- optim(par=res_fit$par, fn=cost, x=x, ace=ace, func=sim_sigmoid, method="L-BFGS-B", hessian = TRUE, lower=lower_sigmoid, upper=upper_sigmoid, control = list(maxit=100))
+  res_stats$sd <- sqrt(diag(solve(res_stats$hessian)))
+  res_fit$res_stats <- res_stats
   return(res_fit)
 }
 
@@ -199,12 +203,55 @@ plot_with_ci_2 <- function(x1, y1, y2, x2, y3, sd_y3, col, h=NULL, ...){
   plot_points(x2, y3, sd_y3, offset=0.002, col=col)
 }
 
-plot_with_ci_3 <- function(sim_results, x, specie, col, ...){
-  plot(sim_results[1,,x], apply(sim_results[,,specie], 2, mean), col=col, type="l", ...)
+plot_with_ci_3 <- function(sim_results, x, specie, col, add_to_plot=FALSE, ...){
+  if (add_to_plot){
+    lines(sim_results[1,,x], apply(sim_results[,,specie], 2, mean), col=col, ...)
+  }else{
+    plot(sim_results[1,,x], apply(sim_results[,,specie], 2, mean), col=col, type="l", ...)
+  }
   polygon(x=c(sim_results[1,,x], rev(sim_results[1,,x])),
           y=c(apply(sim_results[,,specie], 2, max), rev(apply(sim_results[,,specie], 2, min))),
           col=paste(col, "55", sep=""), border=NA)
 }
+
+plot_with_ci_4 <- function(sim_results, x, specie, col, add_to_plot=FALSE, ...){
+  if (add_to_plot){
+    lines(sim_results[1,,x], apply(sim_results[,,specie], 2, mean), col=col, ...)
+  }else{
+    plot(sim_results[1,,x], apply(sim_results[,,specie], 2, mean), col=col, type="l", ...)
+  }
+  polygon(x=c(sim_results[1,,x], rev(sim_results[1,,x])),
+          y=c(apply(sim_results[,,specie], 2, mean)+apply(sim_results[,,specie], 2, sd), rev(apply(sim_results[,,specie], 2, mean)-apply(sim_results[,,specie], 2, sd))),
+          col=paste(col, "55", sep=""), border=NA)
+}
+
+plot_with_ci_5 <- function(simulation_results, n, x, specie, col, add_to_plot=FALSE, ...){
+  if (add_to_plot){
+    lines(x, rev(apply(simulation_results[,,n,specie], 2, mean)), col=col, ...)
+  }else{
+    plot(x, rev(apply(simulation_results[,,n,specie], 2, mean)), col=col, type="l", axes=FALSE, ...)
+    axis(1, at = seq(20,100,by=20), labels = paste(seq(100,20, by=-20)), tick = TRUE)
+    axis(2, tick = TRUE, las=1)
+    box()
+  }
+  polygon(x=c(x, rev(x)),
+          y=c(rev(apply(simulation_results[,,n,specie], 2, mean))+rev(apply(simulation_results[,,n,specie], 2, sd)), rev(rev(apply(simulation_results[,,n,specie], 2, mean))-rev(apply(simulation_results[,,n,specie], 2, sd)))),
+          col=paste(col, "55", sep=""), border=NA)
+}
+
+#plot_with_ci_5 <- function(simulation_results, n, x, specie, col, add_to_plot=FALSE, ...){
+#  if (add_to_plot){
+#    lines(x, rev(apply(simulation_results[,,n,specie], 2, mean)), col=col, ...)
+#  }else{
+#    plot(x, rev(apply(simulation_results[,,n,specie], 2, mean)), col=col, type="l", axes=FALSE, ...)
+#    axis(1, at = seq(20,100,by=20), labels = paste(seq(100,20, by=-20)), tick = TRUE)
+#    axis(2, tick = TRUE, las=1)
+#    box()
+#  }
+#  polygon(x=c(x, rev(x)),
+#          y=c(rev(apply(simulation_results[,,n,specie], 2, min)), rev(rev(apply(simulation_results[,,n,specie], 2, max)))),
+#          col=paste(col, "55", sep=""), border=NA)
+#}
 
 plot_no_ci <- function(fit_results, cond, specie, col, ...){
   if (specie %in% dimnames(fit_results[[cond]]$simulations)$specie){
@@ -229,5 +276,10 @@ get_index_closest <- function(x, v){
 
 error.bar <- function(x, y, upper, lower=upper, length=0.05,...){
   arrows(x,y+upper, x, y-lower, angle=90, code=3, length=length, ...)
+}
+
+get_ace_threshold <- function(ace_flux, ace_conc){
+  idx <- which.min(abs(ace_flux))
+  return(ace_conc[idx])
 }
 
