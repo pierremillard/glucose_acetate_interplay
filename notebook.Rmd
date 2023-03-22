@@ -109,7 +109,7 @@ Save results as Source data.
 data_to_save <- simulation_results[,,"Values[v_glc_uptake]"]
 colnames(data_to_save) <- ace_concentration
 rownames(data_to_save) <- glc_vmax*0.00177
-write.csv(data_to_save, "results/SourceData/Figure 1/1B/growth_rate.csv", quote=FALSE)
+write.csv(data_to_save, "results/SourceData/Figure 1/1B/data_1B.csv", quote=FALSE)
 ```
 
 Plot.
@@ -128,7 +128,7 @@ Save results as Source data.
 data_to_save <- simulation_results[,,"Values[v_ace_net]"]
 colnames(data_to_save) <- ace_concentration
 rownames(data_to_save) <- glc_vmax*0.00177
-write.csv(data_to_save, "results/SourceData/Figure 1/1C/acetate_flux.csv", quote=FALSE)
+write.csv(data_to_save, "results/SourceData/Figure 1/1C/data_1C.csv", quote=FALSE)
 ```
 
 Plot.
@@ -151,7 +151,7 @@ Save results as Source data.
 data_to_save <- simulation_results[,,"Values[v_growth_rate]"]
 colnames(data_to_save) <- ace_concentration
 rownames(data_to_save) <- glc_vmax*0.00177
-write.csv(data_to_save, "results/SourceData/Figure 1/1D/growth_rate.csv", quote=FALSE)
+write.csv(data_to_save, "results/SourceData/Figure 1/1D/data_1D.csv", quote=FALSE)
 ```
 
 Plot.
@@ -308,7 +308,7 @@ file.remove("model/data_30mM_MC.txt")
 Save global sensitivity analysis results for further use.
 
 ```{r eval=FALSE, include=FALSE}
-save(fit_results, file = "results/mc_results.RData")
+save(fit_results, file = "results/MonteCarloSimulations/mc_results.RData")
 ```
 
 ## 4. Glycolytic control of the acetate flux, in absence or presence of acetate
@@ -340,7 +340,7 @@ filter <- (exp_data$ACE<2)
 Simulate data at 0.1 and 30 mM acetate concentration (with sensitivity analysis).
 
 ```{r}
-load(file="results/mc_results.RData")
+load(file="results/MonteCarloSimulations/mc_results.RData")
 ```
 
 ```{r}
@@ -413,16 +413,18 @@ close(pb)
 Save simulation results for further use.
 
 ```{r eval=FALSE, include=FALSE}
-save(simulation_results, file = "results/mc_sim_1_500.RData")
+save(simulation_results, file = "results/MonteCarloSimulations/mc_sim_1_500.RData")
 ```
 
 ### 4.3. Glc uptake as function of glycolytic activity
 
+Load pre-calculated simulation results (500 monte carlo iterations).
+
 ```{r}
-load("results/mc_sim_1_500.RData")
+load("results/MonteCarloSimulations/mc_sim_1_500.RData")
 ```
 
-Model predictions.
+Plot model predictions.
 
 ```{r Figure_2A, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
 x <- seq(20, 100, by=2)
@@ -805,16 +807,18 @@ close(pb)
 Save simulation results for further use.
 
 ```{r eval=FALSE, include=FALSE}
-save(res_e2, file = "results/mc_sim_2_500.RData")
+save(res_e2, file = "results/MonteCarloSimulations/mc_sim_2_500.RData")
 ```
 
 ### 5.2. Acetate concentration threshold
 
-Model predictions.
+Load pre-calculated simulation results (500 monte carlo iterations).
 
 ```{r}
-load("results/mc_sim_2_500.RData")
+load("results/MonteCarloSimulations/mc_sim_2_500.RData")
 ```
+
+Plot predicted acetate flux as function of acetate concentration for different levels of glycolytic activity.
 
 ```{r Figure_3A, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
 xlab_main <- c(0.1, 1, 10, 100)
@@ -850,8 +854,9 @@ colnames(data_to_save) <- c("ace_concentration",
 write.csv(data_to_save, "results/SourceData/Figure 3/3A/data_3A.csv", quote=FALSE)
 ```
 
-```{r Figure_3B, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+Plot predicted acetate concentration threshold as function of glycolytic activity.
 
+```{r Figure_3B, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
 n_glc_steps <- 5
 x <- seq(1, n_glc_steps)/n_glc_steps*100
 
@@ -869,32 +874,29 @@ polygon(x=c(x, rev(x)),
 Save Source data.
 
 ```{r}
-
 data_to_save <- apply(res_e2[,,1,"ace_threshold"], 2, mean)
+
 for (i in seq(5)){
   data_to_save <- cbind(data_to_save,
-                        apply(res_e2[,i,,"Values[v_ace_net]"], 2, mean),
-                        apply(res_e2[,i,,"Values[v_ace_net]"], 2, sd))
+                        apply(res_e2[,,i,"ace_threshold"], 2, mean),
+                        apply(res_e2[,,i,"ace_threshold"], 2, sd))
 }
-colnames(data_to_save) <- c("ace_concentration",
-                            "qACE_mean_glc=20%", "qACE_sd_glc=20%",
-                            "qACE_mean_glc=40%", "qACE_sd_glc=40%",
-                            "qACE_mean_glc=60%", "qACE_sd_glc=60%",
-                            "qACE_mean_glc=80%", "qACE_sd_glc=80%",
-                            "qACE_mean_glc=100%", "qACE_sd_glc=100%")
+colnames(data_to_save) <- c("glycolytic flux",
+                            "conc_mean_glc=20%", "conc_sd_glc=20%",
+                            "conc_mean_glc=40%", "conc_sd_glc=40%",
+                            "conc_mean_glc=60%", "conc_sd_glc=60%",
+                            "conc_mean_glc=80%", "conc_sd_glc=80%",
+                            "conc_mean_glc=100%", "conc_sd_glc=100%")
 write.csv(data_to_save, "results/SourceData/Figure 3/3B/data_3B.csv", quote=FALSE)
 ```
 
 Experimental validation.
 
 ```{r Figure_3C, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
-
-
 # load experimental data
 exp_data <- read.table("data/data_E_coli_K12_MG1655_Figure_3-4.txt", header=TRUE, sep="\t")
 
 # plot acetate flux as function of acetate concentration, at different glycolytic flux (aMG=0, 20, 40 or 100 mM)
-#pdf(file="Figure_3.pdf", width = 4, height = 4)
 
   cols <- rev(colorRampPalette(c("#2E75B6", "#D5E3F0"))(4))
   cols <- hcl.colors(6, "Oslo")
@@ -956,6 +958,14 @@ exp_data <- read.table("data/data_E_coli_K12_MG1655_Figure_3-4.txt", header=TRUE
   axis(side = 1, at = xlab_sec, labels = FALSE, tcl=-0.3)
 ```
 
+Save Source data.
+
+```{r}
+write.csv(exp_data, "results/SourceData/Figure 3/3C/data_3C.csv", quote=FALSE)
+```
+
+Plot experimental acetate concentration threshold as function of glycolytic activity.
+
 ```{r Figure_3D, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
 v0 <- get_ace_threshold(sim_sigmoid(c(-0.2460494, -1.5989450, -0.9279984, 6.9209620), seq(0.1,130,length.out=1000)),
                         seq(0.1,130,length.out=1000))
@@ -966,57 +976,61 @@ v40 <- get_ace_threshold(sim_sigmoid(c(-0.1506843, -7.0591207, 3.5268378, 18.615
 v100 <- get_ace_threshold(sim_sigmoid(c(-0.2395667, -9.8451042, 36.7387431, 64514.4364655), seq(0.1,130,length.out=1000)),
                         seq(0.1,130,length.out=1000))
   
-plot(c(0, 20, 40, 100), c(v0,v20,v40,v100), type="l", col="#548235", las=1, lwd=1.2, ylim=c(0,10), xlab="aMG (mM)", ylab="[Ace]reversal (mM)")
+plot(c(0, 20, 40, 100), c(v0, v20, v40, v100), type="l", col="#548235", las=1, lwd=1.2, ylim=c(0,10), xlab="aMG (mM)", ylab="[Ace] reversal (mM)")
 points(c(0, 20, 40, 100), c(v0,v20,v40,v100), col="#548235", lwd=1.2, pch=20)
 ```
 
-## 6. Growth rate on glucose as function of aMG and acetate concentrations
+Save Source data.
+
+```{r}
+data_to_save <- rbind(c(0, 20, 40, 100), c(v0, v20, v40, v100))
+rownames(data_to_save) <- c("aMG", "ace_conc_threshold")
+
+write.csv(exp_data, "results/SourceData/Figure 3/3D/data_3D.csv", quote=FALSE)
+```
+
+## 6. Growth rate on glucose as function of 𝛼MG and acetate concentrations
 
 Model predictions.
 
 ```{r Figure_4A, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
-
-
 xlab_main <- c(0.1, 1, 10, 100)
 xlab_sec <- c(seq(0.2, 0.9, by=0.1), seq(2, 9, by=1), seq(20, 90, by=10))
 
 # growth rate as function of acetate concentration
 
-#cols <- c("#052547", "#2F609A", "#7199D3", "#C0D0EE")
-cols <- rev(hcl.colors(6, "Oslo"))
-library("colorspace")
-cols = sequential_hcl(6, "blues3")
-
+cols <- sequential_hcl(6, "blues3")
 
 plot_with_ci_4(res_e2[,1,,], "ace_concentration", "Values[v_growth_rate]", col=cols[1], xaxt='n', las=1, lwd=2, xlim=c(0.1,100), ylim=c(0,0.8), log="x", xlab="[acetate] (mM)", ylab="growth rate (h-1)")
-#for (i in seq(1, 5)){
-for (i in c(5)){
-  plot_with_ci_4(res_e2[,i,,], "ace_concentration", "Values[v_growth_rate]", col=cols[i-1], add_to_plot=TRUE, lwd=2)
 
-}
+plot_with_ci_4(res_e2[,5,,], "ace_concentration", "Values[v_growth_rate]", col=cols[4], add_to_plot=TRUE, lwd=2)
+
 axis(side = 1, at = xlab_main, labels = TRUE)
 axis(side = 1, at = xlab_sec, labels = FALSE, tcl=-0.3)
 ```
 
-Experimental validation.
+Save Source data.
+
+```{r}
+data_to_save <- apply(res_e2[,1,,"ace_concentration"], 2, mean)
+for (i in c(1,5)){
+  data_to_save <- cbind(data_to_save,
+                        apply(res_e2[,i,,"Values[v_growth_rate]"], 2, mean),
+                        apply(res_e2[,i,,"Values[v_growth_rate]"], 2, sd))
+}
+colnames(data_to_save) <- c("ace_concentration",
+                            "mu_mean_glc=20%", "mu_sd_glc=20%",
+                            "mu_mean_glc=100%", "mu_sd_glc=100%")
+write.csv(data_to_save, "results/SourceData/Figure 4/4A/data_4A.csv", quote=FALSE)
+```
+
+Plot experimental growth rate as function of acetate concentration at high (0 mM 𝛼MG) or low (100 mM 𝛼MG) glycolytic flux.
 
 ```{r Figure_4B, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
-
-###############################
-# IMPACT OF ACETATE ON GROWTH #
-###############################
-# Output:                     #
-#   - Figure_4.pdf: Fig. 4    #
-###############################
-
 # load experimental data
-
 exp_data <- read.table("data/data_E_coli_K12_MG1655_Figure_3-4.txt", header=TRUE, sep="\t")
 
-
 # plot growth rate as function of acetate concentration, at high (aMG=0mM) and low (aMG=100mM) glycolytic flux
-
-#pdf(file="Figure_4.pdf", width = 4, height = 4)
 
   cols <- rev(colorRampPalette(c("#2E75B6", "#D5E3F0"))(4))
   cols <- hcl.colors(6, "Oslo")
@@ -1062,6 +1076,12 @@ exp_data <- read.table("data/data_E_coli_K12_MG1655_Figure_3-4.txt", header=TRUE
   xlab_sec <- c(seq(0.2, 0.9, by=0.1), seq(2, 9, by=1), seq(20, 90, by=10))
   axis(side = 1, at = xlab_main, labels = TRUE)
   axis(side = 1, at = xlab_sec, labels = FALSE, tcl=-0.3)
+```
+
+Save Source data.
+
+```{r}
+write.csv(sim_data, "results/SourceData/Figure 4/4B/data_4B.csv", quote=FALSE)
 ```
 
 ## 7. Impact of acetate on growth of WT and mutant strains
@@ -1145,12 +1165,12 @@ for (c_source in unique(exp_data$carbon_source)){
 Save results.
 
 ```{r}
-write.table(statistical_results,"results/Statistical_results_glc_gly_gal.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+write.table(statistical_results,"results/StatisticalResults/Statistical_results_glc_gly_gal.tsv", quote=FALSE, sep="\t", row.names=FALSE)
 ```
 
 ### 7.2. Impact of acetate & acetic acid on glucose growth of WT, 𝚫*pgi* and 𝚫*pfkA* strains
 
-Plot data.
+Plot relative change in growth rate of the WT strain induced by acetate on glucose.
 
 ```{r Figure_4C, fig.height=3.5, fig.path='results/Figures/', fig.width=3, dev=c('png', 'pdf')}
 mask <- (is.element(statistical_results[,"carbon source"], c("glucose"))) & (statistical_results[,"ace"] == "10") & (is.element(statistical_results[,"strain"], c("wt")))
@@ -1165,6 +1185,16 @@ axis(side=1,line=0,at=ze_barplot,labels=c("aMG_0", "aMG_100"),mgp=c(0,0.5,0),tck
 box()
 ```
 
+Save Source data.
+
+```{r}
+data_to_save <- statistical_results[(statistical_results[,"carbon source"] == "glucose"),]
+
+write.table(data_to_save,"results/SourceData/Figure 4/4C/data_4C.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+Plot relative change in growth rate of the mutant straints induced by acetate on glucose.
+
 ```{r Figure_4D, fig.height=3.5, fig.path='results/Figures/', fig.width=3, dev=c('png', 'pdf')}
 mask <- (is.element(statistical_results[,"carbon source"], c("glucose"))) & (statistical_results[,"ace"] == "10") & (is.element(statistical_results[,"strain"], c("delta_pgi", "delta_pfkA")))
 
@@ -1176,6 +1206,12 @@ abline(h=0)
 error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
 axis(side=1,line=0,at=ze_barplot,labels=c("pfkA", "pgi"),mgp=c(0,0.5,0),tck=-0.02)
 box()
+```
+
+Save Source data.
+
+```{r}
+write.table(data_to_plot,"results/SourceData/Figure 4/4D/data_4D.tsv", quote=FALSE, sep="\t", row.names=FALSE)
 ```
 
 ### 7.3. Impact of acetate & acetic acid on glucose growth of WT, 𝚫*pta* and 𝚫*acs* strains
@@ -1270,7 +1306,7 @@ for (c_source in unique(exp_data$carbon_source)){
 Save results.
 
 ```{r}
-write.table(statistical_results,"results/Statistical_results_glc_gly_gal_EV1.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+write.table(statistical_results,"results/StatisticalResults/Statistical_results_glc_gly_gal_EV1.tsv", quote=FALSE, sep="\t", row.names=FALSE)
 ```
 
 Plot change in pH.
@@ -1280,7 +1316,7 @@ Plot change in pH.
 data_to_plot <- as.numeric(statistical_results[, "delta_pH_mean"])
 names(data_to_plot) <- paste(statistical_results[, "strain"], statistical_results[, "carbon source"], statistical_results[, "ace"], sep="_")
 data_sd_to_plot <- as.numeric(statistical_results[, "delta_pH_sd"])
-ze_barplot <- barplot(data_to_plot, ylim=c(-0.4,0.1), beside=TRUE, legend.text=FALSE, las=1, ylab="delta pH", xaxt='n')
+ze_barplot <- barplot(data_to_plot, ylim=c(-0.4,0.1), beside=TRUE, legend.text=FALSE, las=1, ylab="change in pH", xaxt='n')
 abline(h=0)
 error.bar(ze_barplot, data_to_plot, data_sd_to_plot)
 axis(side=1,line=0,at=ze_barplot,labels=c("glc_aMG", "glc_aMG_ace10", "glc_aMG_ace100", "glc", "gly", "gly_ace", "gal", "gal_ace"),mgp=c(0,0.5,0),tck=-0.02, las=2)
@@ -1370,7 +1406,7 @@ for (c_source in unique(exp_data$carbon_source)){
 Save results.
 
 ```{r}
-write.table(statistical_results,"results/Statistical_results_glc_gly_gal_EV2.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+write.table(statistical_results,"results/StatisticalResults/Statistical_results_glc_gly_gal_EV2.tsv", quote=FALSE, sep="\t", row.names=FALSE)
 ```
 
 Plot relative change in growth rate induced by acetate.
