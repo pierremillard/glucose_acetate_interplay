@@ -1081,7 +1081,7 @@ exp_data <- read.table("data/data_E_coli_K12_MG1655_Figure_3-4.txt", header=TRUE
 Save Source data.
 
 ```{r}
-write.csv(sim_data, "results/SourceData/Figure 4/4B/data_4B.csv", quote=FALSE)
+write.csv(exp_data, "results/SourceData/Figure 4/4B/data_4B.csv", quote=FALSE)
 ```
 
 ## 7. Impact of acetate on growth of WT and mutant strains
@@ -1168,7 +1168,7 @@ Save results.
 write.table(statistical_results,"results/StatisticalResults/Statistical_results_glc_gly_gal.tsv", quote=FALSE, sep="\t", row.names=FALSE)
 ```
 
-### 7.2. Impact of acetate & acetic acid on glucose growth of WT, 𝚫*pgi* and 𝚫*pfkA* strains
+### 7.2. Impact of acetate on glucose growth of WT, 𝚫*pgi* and 𝚫*pfkA* strains
 
 Plot relative change in growth rate of the WT strain induced by acetate on glucose.
 
@@ -1214,7 +1214,7 @@ Save Source data.
 write.table(data_to_plot,"results/SourceData/Figure 4/4D/data_4D.tsv", quote=FALSE, sep="\t", row.names=FALSE)
 ```
 
-### 7.3. Impact of acetate & acetic acid on glucose growth of WT, 𝚫*pta* and 𝚫*acs* strains
+### 7.3. Impact of acetate on glucose growth of WT, 𝚫*pta* and 𝚫*acs* strains
 
 Plot data.
 
@@ -1231,7 +1231,15 @@ axis(side=1,line=0,at=ze_barplot,labels=c("aMG_100_wt","aMG_100_pta","aMG_100_ac
 box()
 ```
 
-### 7.4. Impact of acetate & acetic acid on growth of WT, 𝚫*pta* and 𝚫*acs* strains on glycerol and galactose
+Save Source data.
+
+```{r}
+mask <- (is.element(exp_data$carbon_source, c("glucose")) & is.element(exp_data$genotype, c("wt", "delta_pta", "delta_acs")))
+
+write.table(exp_data[mask, ],"results/SourceData/Figure 6/data_6.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+### 7.4. Impact of acetate on growth of WT, 𝚫*pta* and 𝚫*acs* strains on glycerol and galactose
 
 Relative change in growth rate on glycerol.
 
@@ -1263,6 +1271,14 @@ axis(side=1,line=0,at=ze_barplot,labels=c("wt", "pta","acs"),mgp=c(0,0.5,0),tck=
 box()
 ```
 
+Save Source data.
+
+```{r}
+mask <- (is.element(exp_data$carbon_source, c("galactose", "glycerol")) & is.element(exp_data$genotype, c("wt", "delta_pta", "delta_acs")))
+
+write.table(exp_data[mask, ],"results/SourceData/Figure 7/data_7.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
 ## 8. Change in pH and impact of acetic acid on growth
 
 ### 8.1. Change in pH with sodium acetate
@@ -1274,7 +1290,6 @@ exp_data <- read.table("data/data_E_coli_K12_BW25113_Figure_EV1.txt", header=TRU
 ```
 
 ```{r}
-
 statistical_results <- array(NA, dim=c(8, 6), dimnames=list(NULL, c("carbon source", "strain", "aMG", "ace", "delta_pH_mean", "delta_pH_sd")))
 
 k <- 0
@@ -1312,8 +1327,8 @@ write.table(statistical_results,"results/StatisticalResults/Statistical_results_
 Plot change in pH.
 
 ```{r Figure_EV1, fig.height=4.5, fig.path='results/Figures/', fig.width=6, dev=c('png', 'pdf')}
-
 data_to_plot <- as.numeric(statistical_results[, "delta_pH_mean"])
+
 names(data_to_plot) <- paste(statistical_results[, "strain"], statistical_results[, "carbon source"], statistical_results[, "ace"], sep="_")
 data_sd_to_plot <- as.numeric(statistical_results[, "delta_pH_sd"])
 ze_barplot <- barplot(data_to_plot, ylim=c(-0.4,0.1), beside=TRUE, legend.text=FALSE, las=1, ylab="change in pH", xaxt='n')
@@ -1332,7 +1347,6 @@ exp_data <- read.table("data/data_E_coli_K12_BW25113_Figure_EV2.txt", header=TRU
 ```
 
 ```{r}
-
 statistical_results <- array(NA, dim=c(8, 13), dimnames=list(NULL, c("carbon source", "strain", "aMG", "ace", "mu_mean", "mu_sd", "n_replicates", "p-val (vs wt, same ace)", "p-val (vs 0 mM ace, same strain)", "relative growth change", "rgc_sd", "delta_pH_mean", "delta_pH_sd")))
 
 k <- 0
@@ -1453,8 +1467,8 @@ box()
 Plot change in pH.
 
 ```{r Figure_EV2D, fig.height=3.5, fig.path='results/Figures/', fig.width=6, dev=c('png', 'pdf')}
-
 data_to_plot <- as.numeric(statistical_results[, "delta_pH_mean"])
+
 names(data_to_plot) <- paste(statistical_results[, "strain"], statistical_results[, "carbon source"])
 data_sd_to_plot <- as.numeric(statistical_results[, "delta_pH_sd"])
 ze_barplot <- barplot(data_to_plot, ylim=c(-0.4,0.1), beside=TRUE, legend.text=FALSE, las=1, ylab="change in pH", xaxt='n')

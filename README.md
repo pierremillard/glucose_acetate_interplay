@@ -8,7 +8,7 @@ This R code perform all analyses detailed in the following publication:
 >
 > P. Millard, T. Gosselin-Monplaisir, S. Uttenweiler-Joseph, B. Enjalbert. bioRxiv, 2022, doi: [10.1101/2022.09.20.506926](https://doi.org/10.1101/2022.09.20.506926)
 
-The model is available in COPASI format in the `./model/` directory, and in SBML format from the Biomodels database (http://www.ebi.ac.uk/biomodels/) under identifier MODEL2005050001. Details on the model can be found in the original publication (Millard et al., 2021, eLife, doi: [10.7554/eLife.63661](https://doi.org/10.7554/eLife.63661)) and at https://github.com/MetaSys-LISBP/acetate_regulation. Experimental data are provided in the `./data/` directory. Calculation results and figures are saved in the `./results/` directory.
+The model is available in COPASI format in the `./model/` directory, and in SBML format from the Biomodels database (http://www.ebi.ac.uk/biomodels/) under identifier MODEL2005050001. Details on the model can be found in Millard et al. 2021 (eLife, doi: [10.7554/eLife.63661](https://doi.org/10.7554/eLife.63661)) and at https://github.com/MetaSys-LISBP/acetate_regulation. Experimental data are provided in the `./data/` directory. Calculation results and figures are saved in the `./results/` directory.
 
 Details on the calculations can be found in the [original publication](https://doi.org/10.1101/2022.09.20.506926) and in the Rmd notebook.
 
@@ -52,7 +52,7 @@ To run all analyses detailed in the publication and reproduce Figures 1-4, 6-7 a
 
 - open the file `./notebook.Rmd`
 
-The notebook will open in Rstudio, in each cell you can read/modify/execute a proposed code as well as read accompanying comments.
+The notebook will open in Rstudio, in each cell you can read/modify/execute the code as well as read accompanying comments.
 
 ## Questions
 If you have any question, please open a new *issue*
