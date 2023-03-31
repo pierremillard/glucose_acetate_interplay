@@ -1,0 +1,1479 @@
+---
+title: "Interplay between glycolytic and acetate metabolisms in <i>Escherichia coli</i><br></br>"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+---
+
+ 
+
+This notebook performs computational analyses detailed in:
+
+> From toxic waste to beneficial nutrient: acetate boosts *Escherichia coli* growth at low glycolytic flux.
+>
+> P. Millard, T. Gosselin-Monplaisir, S. Uttenweiler-Joseph, B. Enjalbert
+>
+> bioRxiv preprint, doi: [10.1101/2022.09.20.506926](https://doi.org/10.1101/2022.09.20.506926)
+
+This R Markdown notebook is available at <https://github.com/MetaSys-LISBP/glucose_acetate_interplay>
+
+Author: Pierre Millard ([pierre.millard\@insa-toulouse.fr](mailto:pierre.millard@insa-toulouse.fr){.email})
+
+Copyright INRAE, 2023
+
+## 1. Initialize environment
+
+Load libraries and initialize environment.
+
+```{r}
+source("misc.R")
+```
+
+## 2. Simulate response of *E. coli* to changes of glycolytic activity and acetate concentration
+
+### 2.1. Run simulations
+
+Load the kinetic model detailed at doi: 10.7554/eLife.63661 and available from Biomodels database ([https://www.ebi.ac.uk/biomodels/)](https://www.ebi.ac.uk/biomodels/)) with the identifier MODEL2005050001.
+
+```{r}
+loadModel("model/Millard2020_Ecoli_glc_ace_kinetic_model.cps")
+```
+
+Delete events and fix concentrations of acetate, glucose and biomass.
+
+```{r}
+deleteEvent(getEvents()$key)
+setSpecies(key="Ace_out", type="fixed")
+setSpecies(key="Glc", type="fixed")
+setSpecies(key="X", type="fixed")
+```
+
+Define the range of acetate concentration and glycolytic activity used to run simulations.
+
+```{r}
+#   number of steps
+n_step <- 50
+
+#   acetate concentration (between 0.1 and 100 mM)
+ace_concentration <- 10**seq(-1, 2, length.out = n_step)
+
+#   glycolytic activity (between 20 and 100 % of initial Vmax)
+glc_vmax <- getParameters(key="(glc_upt).V")$value*seq(0.2*n_step, n_step)/n_step
+```
+
+Calculate steady-state fluxes for each acetate concentration and level of glycolytic activity.
+
+```{r}
+# create empty matrix to store simulation results
+fluxes <- c("Values[v_growth_rate]", "Values[v_glc_uptake]", "Values[v_ace_net]")
+simulation_results <- array(NA, dim=c(n_step*0.8+1, n_step, length(fluxes)+1), dimnames=list(inhibition=NULL, ace_concentration=NULL, specie=c("ace_concentration", fluxes)))
+
+# run simulations
+
+# for each glycolytic activity
+for (k in seq(n_step*0.8+1)){
+  
+  # create empty matrix to store simulation results for a given glycolytic activity (k)
+  res_ace_range <- matrix(NA, nrow=n_step, ncol=length(fluxes)+1, dimnames=list(r=NULL, c=c("ace_concentration", fluxes)))
+  
+  # update Vmax_glycolysis
+  setParameters(key="(glc_upt).V", value = glc_vmax[k])
+  applyInitialState()
+  
+  # for each acetate concentration
+  for (j in seq(n_step)){
+    
+    # update acetate concentration
+    setSpecies(key="Ace_out", initial_concentration=ace_concentration[j])
+    applyInitialState()
+    
+    # calculate steady-state fluxes
+    res_ss <- runSteadyState()
+    
+    # save steady-state fluxes for glycolytic activity k & acetate concentration j
+    res_ace_range[j,] <- c(ace_concentration[j], unlist(res_ss$global_quantities[res_ss$global_quantities$key %in% fluxes, "value"]))
+  }
+  
+  # save steady-state fluxes for all acetate concentrations at glycolytic activity k
+  simulation_results[k,,] <- res_ace_range
+  
+}
+```
+
+### 2.2. Glycolytic flux
+
+Save results as Source data.
+
+```{r}
+data_to_save <- simulation_results[,,"Values[v_glc_uptake]"]
+colnames(data_to_save) <- ace_concentration
+rownames(data_to_save) <- glc_vmax*0.00177
+write.csv(data_to_save, "results/SourceData/Figure 1/1B/data_1B.csv", quote=FALSE)
+```
+
+Plot.
+
+```{r Figure_1B, fig.width = 6.3, fig.height = 4.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+filled.contour(x=log10(ace_concentration), y=(glc_vmax/max(glc_vmax))*100, z = t(simulation_results[,,3]), nlevels = 10,
+                 plot.axes = { axis(1, at=c(-1, 0, 1, 2), label=c(0.1, 1, 10, 100));
+                 axis(2)})
+```
+
+### 2.3. Acetate flux
+
+Save results as Source data.
+
+```{r}
+data_to_save <- simulation_results[,,"Values[v_ace_net]"]
+colnames(data_to_save) <- ace_concentration
+rownames(data_to_save) <- glc_vmax*0.00177
+write.csv(data_to_save, "results/SourceData/Figure 1/1C/data_1C.csv", quote=FALSE)
+```
+
+Plot.
+
+```{r Figure_1C, fig.width = 6.3, fig.height = 4.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+cols = colorRampPalette(c('royalblue4','lightblue'))
+  color.palette = function(n) hcl.colors(n, "YlOrRd", rev = TRUE)
+
+  filled.contour(x=log10(ace_concentration), y=(glc_vmax/max(glc_vmax))*100, z = t(simulation_results[,,4]), nlevels = 10, 
+                 col = c(cols(5), color.palette(4)),
+                 plot.axes = { axis(1, at=c(-1, 0, 1, 2), label=c(0.1, 1, 10, 100));
+                 axis(2)})
+```
+
+### 2.4. Growth rate
+
+Save results as Source data.
+
+```{r}
+data_to_save <- simulation_results[,,"Values[v_growth_rate]"]
+colnames(data_to_save) <- ace_concentration
+rownames(data_to_save) <- glc_vmax*0.00177
+write.csv(data_to_save, "results/SourceData/Figure 1/1D/data_1D.csv", quote=FALSE)
+```
+
+Plot.
+
+```{r Figure_1D, fig.width = 6.3, fig.height = 4.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+filled.contour(x=log10(ace_concentration), y=(glc_vmax/max(glc_vmax))*100, z = t(simulation_results[,,2]), nlevels = 10,
+                 plot.axes = { axis(1, at=c(-1, 0, 1, 2), label=c(0.1, 1, 10, 100));
+                 axis(2)})
+```
+
+## 3. Run sensitivity analysis
+
+To estimate the precision on model predictions, we first run a global sensitivity analysis to estimate precision on model parameters. We apply Monte Carlo analysis to generate 500 sets of parameters by fitting noisy experimental data taken from Millard et al. (2021).
+
+```{r}
+loadModel("model/Millard2020_Ecoli_glc_ace_model_4_MC.cps")
+
+# create calibration data files for monte carlo simulations
+file.copy("model/data_1mM.txt", "model/data_1mM_MC.txt", overwrite=TRUE)
+file.copy("model/data_10mM.txt", "model/data_10mM_MC.txt", overwrite=TRUE)
+file.copy("model/data_30mM.txt", "model/data_30mM_MC.txt", overwrite=TRUE)
+
+# number of Monte Carlo iterations
+n_iter_mc <- 5
+
+# get parameters for the best fit
+res_PE_model4 <- runParameterEstimation(method = "Statistics", model = getCurrentModel())
+
+# list used to set up global sensitivity analysis and store calculation results
+fit_results <- list("1" = list("initial_concentrations"= c("Ace0_out"=0.92, "Glc"=12.9, "X"=0.0671),
+                               "species_idx" = c("[Ace0_out]_0"=1, "[Glc]_0"=1, "[X]_0"=1),
+                               "data_exp" = read.table("model/data_1mM.txt", header=TRUE, sep="\t"),
+                               "sd" = c("Ace"=0.2, "Glc"=0.5, "X"=0.045, "Ace_enr"=0.03),
+                               "mapping" = c("Ace"="Acet_out", "Glc"="Glc", "X"="X", "Ace_enr"="Values[Ace_enr]")),
+                    "10" = list("initial_concentrations"= c("Ace0_out"=9, "Glc"=14.192, "X"=0.07),
+                                "species_idx" = c("[Ace0_out]_0"=2, "[Glc]_0"=2, "[X]_0"=2),
+                                "data_exp" = read.table("model/data_10mM.txt", header=TRUE, sep="\t"),
+                                "sd" = c("Ace"=0.2, "Glc"=0.5, "X"=0.045, "Ace_enr"=0.03),
+                                "mapping" = c("Ace"="Acet_out", "Glc"="Glc", "X"="X", "Ace_enr"="Values[Ace_enr]")),
+                    "30" = list("initial_concentrations"= c("Ace0_out"=30.2448, "Glc"=12.5, "X"=0.07227),
+                                "species_idx" = c("[Ace0_out]_0"=3, "[Glc]_0"=3, "[X]_0"=3),
+                                "data_exp" = read.table("model/data_30mM.txt", header=TRUE, sep="\t"),
+                                "sd" = c("Ace"=0.2, "Glc"=0.5, "X"=0.045, "Ace_enr"=0.03),
+                                "mapping" = c("Ace"="Acet_out", "Glc"="Glc", "X"="X", "Ace_enr"="Values[Ace_enr]")),
+                    "res_par" = res_PE_model4$parameters[, c("parameter", "value")],
+                    "res_cost" = c(res_PE_model4$main$objective_value),
+                    "res_converged" = c(test_khi2(nb_points=152, k_val=res_PE_model4$main$objective_value, nb_par=11)$`p-value, i.e. P(X^2<=value)` < 0.95))
+```
+
+Simulate data from the best fit.
+
+```{r}
+# simulate data for the best fit
+for (i in c("1", "10", "30")){
+  # update initial conditions (Glc, Ace and biomass concentrations)
+  for (j in names(fit_results[[i]][["initial_concentrations"]])){
+    setSpecies(key=j, initial_concentration=fit_results[[i]][["initial_concentrations"]][j])
+  }
+  # apply initial state
+  applyInitialState()
+  # run time course simulation
+  tmp <- as.matrix(runTimeCourse()$result)
+  # get complete simulation results
+  idx_t_max <- (tmp[,"Time"] <= max(fit_results[[i]][["data_exp"]]$time))
+  fit_results[[i]]$simulations <- array(NA, dim=c(n_iter_mc+1, sum(idx_t_max), ncol(tmp)), dimnames=list(iter=NULL, time=NULL, specie=colnames(tmp)))
+  fit_results[[i]]$simulations[1,,] <- tmp[idx_t_max,]
+  # get index of simulated data at experimental time points
+  fit_results[[i]]$t_idx <- match(fit_results[[i]][["data_exp"]]$time, fit_results[[i]]$simulations[1,,"Time"])
+  # get simulated data that match experimental time points
+  sim_data <- fit_results[[i]][["data_exp"]]
+  for (k in names(fit_results[[i]][["mapping"]])){
+    sim_data[,k] <- fit_results[[i]]$simulations[1,fit_results[[i]]$t_idx,fit_results[[i]][["mapping"]][[k]]]
+  }
+  fit_results[[i]]$sim_mc <- sim_data
+}
+```
+
+Run sensitivity analysis.
+
+```{r eval=FALSE, include=FALSE}
+# create progress bar
+pb <- txtProgressBar(min=0, max=n_iter_mc, style=3)
+
+# run global sensitivity analysis
+j <- 0
+while (j < n_iter_mc){
+  
+  # generate noisy datasets according to the experimental standard deviation
+  for (i in c("1", "10", "30")){
+    # initialize dataset with simulations of the best fit
+    data_noise <- fit_results[[i]]$sim_mc
+    nr <- nrow(data_noise)
+    # add noise
+    for (k in names(fit_results[[i]]$sd)){
+      data_noise[,k] <- rnorm(nr, mean=data_noise[,k], sd=fit_results[[i]]$sd[[k]])
+    }
+    # set negative concentrations to 0
+    data_noise[data_noise < 0] <- 0
+    # save the noisy dataset
+    write.table(data_noise, paste("model/data_", i, "mM_MC.txt", sep=""), sep="\t", row.names = FALSE, quote = FALSE)
+  }
+  
+  # run parameter estimation (SRES followed by Hooke and Jeeves and Levenberg-Marquadt methods to refine convergence)
+  # note: this protocol ensures faster convergence in comparison to PSO, which is necessary for monte carlo analysis
+  res_PE_tmp <- runParameterEstimation(method = "SRES", randomize_start_values=TRUE, update_model=TRUE)
+  res_PE_tmp <- runParameterEstimation(method = "HookeJeeves", randomize_start_values=FALSE, update_model=TRUE)
+  res_PE_tmp <- runParameterEstimation(method = "LevenbergMarquardt", randomize_start_values=FALSE, update_model=TRUE)
+  
+  # check if optimization has converged, reiterate if not
+  p_val_chi2 <- test_khi2(nb_points=152, k_val=res_PE_tmp$main$objective_value, nb_par=11)$`p-value, i.e. P(X^2<=value)`
+  if (p_val_chi2 > 0.95){
+    next
+  }
+  
+  j = j+1
+  
+  # update the progress bar
+  setTxtProgressBar(pb, j)
+  
+  # save parameter estimation results
+  fit_results$res_par <- cbind(fit_results$res_par, res_PE_tmp$parameters[, "value"])
+  fit_results$res_cost <- c(fit_results$res_cost, res_PE_tmp$main$objective_value)
+  fit_results$res_converged <- c(fit_results$res_converged, p_val_chi2 < 0.95)
+  
+  # simulate all experiments
+  for (i in c("1", "10", "30")){
+    # update experiment-dependent parameters
+    for (l in names(fit_results[[i]]$species_idx)){
+      idx <- which(res_PE_tmp$parameters$parameter==l)[fit_results[[i]]$species_idx[l]]
+      k <- sub(".*\\[(.*)\\].*", "\\1", l, perl=TRUE)
+      setSpecies(key=k, initial_concentration=as.numeric(res_PE_tmp$parameters[idx,"value"]))
+    }
+    # apply initial state
+    applyInitialState()
+    # run time course simulations
+    tmp <- as.matrix(runTimeCourse()$result)
+    # get complete simulation results
+    fit_results[[i]]$simulations[j+1,,] <- tmp[tmp[,"Time"] <= max(fit_results[[i]][["data_exp"]]$time),]
+  }
+}
+
+# close progress bar
+close(pb)
+```
+
+Delete temporary (noisy) calibration data files.
+
+```{r include=FALSE}
+file.remove("model/data_1mM_MC.txt")
+file.remove("model/data_10mM_MC.txt")
+file.remove("model/data_30mM_MC.txt")
+```
+
+Save global sensitivity analysis results for further use.
+
+```{r eval=FALSE, include=FALSE}
+save(fit_results, file = "results/MonteCarloSimulations/mc_results.RData")
+```
+
+## 4. Glycolytic control of the acetate flux, in absence or presence of acetate
+
+### 4.1. Load experimental data
+
+```{r}
+exp_data <- read.table("data/data_E_coli_K12_MG1655_Figure_2.txt", header=TRUE, sep="\t")
+```
+
+Calculate the total carbon uptake rate and the contribution of acetate to carbon uptake.
+
+```{r}
+# calculate total carbon uptake flux
+Ctotal <- -exp_data$qACE*2 + exp_data$qGLC*6
+
+# calculate the contribution of acetate to carbon uptake (qACE/(qGLC+qACE))
+contribution_acetate <- -exp_data$qACE*2 / (-exp_data$qACE*2 + exp_data$qGLC*6) * 100
+
+# add calculated metrics to measurements dataframe
+exp_data <- cbind(exp_data, Ctotal, contribution_acetate)
+
+# create mask for data obtained at low acetate concentration (< 2 mM)
+filter <- (exp_data$ACE<2)
+```
+
+### 4.2. Run simulations
+
+Simulate data at 0.1 and 30 mM acetate concentration (with sensitivity analysis).
+
+```{r}
+load(file="results/MonteCarloSimulations/mc_results.RData")
+```
+
+```{r}
+# load model
+loadModel("model/Millard2020_Ecoli_glc_ace_kinetic_model_sensitivity_analysis.cps")
+
+# remove events and fix concentrations of actate, glucose and biomass
+deleteEvent(getEvents()$key)
+setSpecies(key="Ace_out", type="fixed")
+setSpecies(key="Glc", type="fixed")
+setSpecies(key="X", type="fixed")
+```
+
+Simulate steady-state fluxes for all set of estimated parameters.
+
+```{r eval=FALSE, include=FALSE}
+# run simulations
+n_glc_steps <- 50
+range_glc_vmax <- seq(0.2*n_glc_steps, n_glc_steps)/n_glc_steps
+glc_vmax <- getParameters(key="(glc_upt).V")$value*range_glc_vmax
+
+ace_concentration <- c(0.1, 30)
+fluxes <- c("Values[v_growth_rate]", "Values[v_glc_uptake]", "Values[v_ace_net]")
+
+# sensitivity analysis
+# run simulations for all sets of parameters
+simulation_results <- array(NA, dim=c(ncol(fit_results$res_par)-1, length(glc_vmax), length(ace_concentration), length(fluxes)+2), dimnames=list(iter=NULL, glc_vmax=NULL, ace_concentration=NULL, specie=c("ace_concentration", c(fluxes, "Total_C_uptake"))))
+
+# create progress bar
+pb <- txtProgressBar(min=0, max=ncol(fit_results$res_par)-1, style=3)
+
+for (i in seq(ncol(fit_results$res_par)-1)){
+  print(i+1)
+  rp <- c(fit_results$res_par[,i+1])
+  names(rp) <- fit_results$res_par[,"parameter"]
+  model <- update_params(getCurrentModel(), rp)
+  
+  res_glc_ace_range <- array(NA, dim=c(length(glc_vmax), length(ace_concentration), length(fluxes)+2), dimnames=list(glc_vmax=NULL, ace_concentration=NULL, specie=c("ace_concentration", fluxes, "Total_C_uptake")))
+
+  
+  for (g in seq(length(range_glc_vmax))){
+    
+    model <- update_params(getCurrentModel(), rp)
+    glc_act <- getParameters(key="(glc_upt).V")$value * range_glc_vmax[g]
+    setParameters(key="(glc_upt).V", value = glc_act)
+    applyInitialState()
+    
+    res_ace_range <- matrix(NA, nrow=length(ace_concentration), ncol=length(fluxes)+2, dimnames=list(r=NULL, c=c("ace_concentration", fluxes, "Total_C_uptake")))
+    for (j in seq(length(ace_concentration))){
+      setSpecies(key="Ace_out", initial_concentration=ace_concentration[j])
+      applyInitialState()
+      res_ss <- runSteadyState()
+      total_C_flux <- res_ss$global_quantities[res_ss$global_quantities$key == "Values[v_glc_uptake]", "value"]*6 - res_ss$global_quantities[res_ss$global_quantities$key == "Values[v_ace_net]", "value"]*2
+      res_ace_range[j,] <- c(ace_concentration[j], unlist(res_ss$global_quantities[res_ss$global_quantities$key %in% fluxes, "value"]),unlist(total_C_flux))
+    }
+    
+    res_glc_ace_range[g,,] <- res_ace_range
+  }
+  simulation_results[i,,,] <- res_glc_ace_range
+    
+    
+  # update the progress bar
+  setTxtProgressBar(pb, i)
+}
+
+# close progress bar
+close(pb)
+```
+
+Save simulation results for further use.
+
+```{r eval=FALSE, include=FALSE}
+save(simulation_results, file = "results/MonteCarloSimulations/mc_sim_1_500.RData")
+```
+
+### 4.3. Glc uptake as function of glycolytic activity
+
+Load pre-calculated simulation results (500 monte carlo iterations).
+
+```{r}
+load("results/MonteCarloSimulations/mc_sim_1_500.RData")
+```
+
+Plot model predictions.
+
+```{r Figure_2A, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+x <- seq(20, 100, by=2)
+
+plot_with_ci_5(simulation_results, 1, x, "Values[v_glc_uptake]", col="#1F4E79", las=1, lwd=1.2, ylim=c(0,12), xlab="Glycolytic activity (%)", ylab="qGLC (mmol/gDW/h)", yaxs="i")
+
+plot_with_ci_5(simulation_results, 2, x, "Values[v_glc_uptake]", col="#9DC3E6", add_to_plot = TRUE, lwd=1.2)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- cbind(apply(simulation_results[,,1,"Values[v_growth_rate]"], 2, mean),
+                      apply(simulation_results[,,1,"Values[v_growth_rate]"], 2, sd),
+                      apply(simulation_results[,,2,"Values[v_growth_rate]"], 2, mean),
+                      apply(simulation_results[,,2,"Values[v_growth_rate]"], 2, sd))
+
+colnames(data_to_save) <- c("mean_ace_0", "sd_ace_0", "mean_ace_30", "sd_ace_30")
+rownames(data_to_save) <- glc_vmax/max(glc_vmax)*100
+
+write.csv(data_to_save, "results/SourceData/Figure 2/2A/data_2A.csv", quote=FALSE)
+```
+
+Experimental validation.
+
+```{r Figure_2E, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+# fit polynomial model
+polyfit_no_ace <- polynomial_model(exp_data[filter,], "aMG", "qGLC", 2, lpred=seq(0,100,by=0.1))
+polyfit_ace <- polynomial_model(exp_data[!filter,], "aMG", "qGLC", 2, lpred=seq(0,100,by=0.1))
+
+# plot fit and confidence intervals
+plot(polyfit_no_ace$fited_curve_x, polyfit_no_ace$fited_curve_y, ylim=c(0,12), las=1, yaxs="i", ylab="qGLC (mmol/gDW/h)", xlab="[aMG] (mM)", col="#1F4E79", lwd=1.5, type="l")
+lines(polyfit_ace$fited_curve_x, polyfit_ace$fited_curve_y, col="#9DC3E6", lwd=1.5)
+
+# NOTE: uncomment the two following lines to plot 95 % confidence intervals on the polynomial fits
+#polygon(c(polyfit_no_ace$fited_curve_x, rev(polyfit_no_ace$fited_curve_x)), c(polyfit_no_ace$confidence_intervals[,1], rev(polyfit_no_ace$confidence_intervals[,2])), col=adjustcolor("#1F4E79", alpha.f=0.4), border = NA)
+#polygon(c(polyfit_ace$fited_curve_x, rev(polyfit_ace$fited_curve_x)), c(polyfit_ace$confidence_intervals[,1], rev(polyfit_ace$confidence_intervals[,2])), col=adjustcolor("#9DC3E6", alpha.f=0.4), border = NA)
+# plot experimental data
+
+points(exp_data$aMG[filter], exp_data$qGLC[filter], lwd=1.0, pch=21, bg="#1F4E79", col="black", cex=1.4)
+points(exp_data$aMG[!filter], exp_data$qGLC[!filter], pch=22, bg="#9DC3E6", col="black", cex=1.4, lwd=1.0)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- exp_data[,c("strain", "carbon_source", "aMG", "ACE", "qGLC", "source")]
+write.csv(data_to_save, "results/SourceData/Figure 2/2E/data_2E.csv", quote=FALSE)
+```
+
+### 4.4. Acetate flux as function of glycolytic activity
+
+Model predictions.
+
+```{r Figure_2B, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+x <- seq(20, 100, by=2)
+
+plot_with_ci_5(simulation_results, 1, x, "Values[v_ace_net]", col="#548235", las=1, lwd=1.2, ylim=c(-11,5), yaxs="i", xlab="Glycolytic activity (%)", ylab="qACE (mmol/gDW/h)")
+abline(h=0)
+
+plot_with_ci_5(simulation_results, 2, x, "Values[v_ace_net]", col="#A9D18E", add_to_plot = TRUE, lwd=1.2)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- cbind(apply(simulation_results[,,1,"Values[v_ace_net]"], 2, mean),
+                      apply(simulation_results[,,1,"Values[v_ace_net]"], 2, sd),
+                      apply(simulation_results[,,2,"Values[v_ace_net]"], 2, mean),
+                      apply(simulation_results[,,2,"Values[v_ace_net]"], 2, sd))
+
+colnames(data_to_save) <- c("mean_ace_0", "sd_ace_0", "mean_ace_30", "sd_ace_30")
+rownames(data_to_save) <- glc_vmax/max(glc_vmax)*100
+
+write.csv(data_to_save, "results/SourceData/Figure 2/2B/data_2B.csv", quote=FALSE)
+```
+
+Experimental validation.
+
+```{r Figure_2F, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+# fit polynomial model
+polyfit_no_ace <- polynomial_model(exp_data[filter,], "aMG", "qACE", 2, lpred=seq(0,100,by=0.1))
+polyfit_ace <- polynomial_model(exp_data[!filter,], "aMG", "qACE", 2, lpred=seq(0,100,by=0.1))
+
+# plot fit and confidence intervals
+plot(polyfit_no_ace$fited_curve_x, polyfit_no_ace$fited_curve_y, ylim=c(-11,5), las=1, yaxs="i", ylab="qACE (mmol/gDW/h)", xlab="[aMG] (mM)", col="#548235", lwd=1.5, type="l")
+
+abline(h=0)
+
+lines(polyfit_ace$fited_curve_x, polyfit_ace$fited_curve_y, col="#A9D18E", lwd=1.5)
+#polygon(c(polyfit_no_ace$fited_curve_x, rev(polyfit_no_ace$fited_curve_x)), c(polyfit_no_ace$confidence_intervals[,1], rev(polyfit_no_ace$confidence_intervals[,2])), col=adjustcolor("#548235", alpha.f=0.4), border = NA)
+#polygon(c(polyfit_ace$fited_curve_x, rev(polyfit_ace$fited_curve_x)), c(polyfit_ace$confidence_intervals[,1], rev(polyfit_ace$confidence_intervals[,2])), col=adjustcolor("#A9D18E", alpha.f=0.4), border = NA)
+
+# plot experimental data
+points(exp_data$aMG[filter], exp_data$qACE[filter], lwd=1.0, pch=21, bg="#548235", col="black", cex=1.4)
+points(exp_data$aMG[!filter], exp_data$qACE[!filter], pch=22, bg="#A9D18E", col="black", cex=1.4, lwd=1.0)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- exp_data[,c("strain", "carbon_source", "aMG", "ACE", "qACE", "source")]
+write.csv(data_to_save, "results/SourceData/Figure 2/2F/data_2F.csv", quote=FALSE)
+```
+
+### 4.5. Growth rate as function of glycolytic activity
+
+Model predictions.
+
+```{r Figure_2C, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+x <- seq(20, 100, by=2)
+
+plot_with_ci_5(simulation_results, 1, x, "Values[v_growth_rate]", col = "#B63A2D", las = 1, lwd = 1.2, ylim = c(0, 0.7), xlab = "Glycolytic activity (%)", ylab = "Growth rate (h-1)", yaxs="i")
+
+plot_with_ci_5( simulation_results, 2, x, "Values[v_growth_rate]", col = "#E49890", add_to_plot = TRUE, lwd = 1.2)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- cbind(apply(simulation_results[,,1,"Values[v_growth_rate]"], 2, mean),
+                      apply(simulation_results[,,1,"Values[v_growth_rate]"], 2, sd),
+                      apply(simulation_results[,,2,"Values[v_growth_rate]"], 2, mean),
+                      apply(simulation_results[,,2,"Values[v_growth_rate]"], 2, sd))
+
+colnames(data_to_save) <- c("mean_ace_0", "sd_ace_0", "mean_ace_30", "sd_ace_30")
+rownames(data_to_save) <- glc_vmax/max(glc_vmax)*100
+
+write.csv(data_to_save, "results/SourceData/Figure 2/2C/data_2C.csv", quote=FALSE)
+```
+
+Experimental validation.
+
+```{r Figure_2G, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+# fit polynomial model
+polyfit_no_ace <- polynomial_model(exp_data[filter,], "aMG", "mu", 2, lpred=seq(0,100,by=0.1))
+polyfit_ace <- polynomial_model(exp_data[!filter,], "aMG", "mu", 2, lpred=seq(0,100,by=0.1))
+
+# plot fit and confidence intervals
+plot(polyfit_no_ace$fited_curve_x, polyfit_no_ace$fited_curve_y, ylim=c(0,0.7), las=1, yaxs="i", ylab="growth rate (h-1)", xlab="[aMG] (mM)", col="#B63A2D", lwd=1.5, type="l")
+lines(polyfit_ace$fited_curve_x, polyfit_ace$fited_curve_y, col="#E49890", lwd=1.5)
+#polygon(c(polyfit_no_ace$fited_curve_x, rev(polyfit_no_ace$fited_curve_x)), c(polyfit_no_ace$confidence_intervals[,1], rev(polyfit_no_ace$confidence_intervals[,2])), col=adjustcolor("#B63A2D", alpha.f=0.4), border = NA)
+#polygon(c(polyfit_ace$fited_curve_x, rev(polyfit_ace$fited_curve_x)), c(polyfit_ace$confidence_intervals[,1], rev(polyfit_ace$confidence_intervals[,2])), col=adjustcolor("#E49890", alpha.f=0.4), border = NA)
+
+# plot experimental data
+points(exp_data$aMG[filter], exp_data$mu[filter], lwd=1.0, pch=21, bg="#B63A2D", col="black", cex=1.4)
+points(exp_data$aMG[!filter], exp_data$mu[!filter], pch=22, bg="#E49890", col="black", cex=1.4, lwd=1.0)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- exp_data[,c("strain", "carbon_source", "aMG", "ACE", "mu", "source")]
+write.csv(data_to_save, "results/SourceData/Figure 2/2G/data_2G.csv", quote=FALSE)
+```
+
+### 4.6. Total carbon uptake
+
+Model predictions.
+
+```{r Figure_2D, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+x <- seq(20, 100, by=2)
+
+plot_with_ci_5(simulation_results, 1, x, "Total_C_uptake", col="#451E5D", las=1, lwd=1.2, ylim=c(0,60), xlab="Glycolytic activity (%)", ylab="Total C uptake (mmol/gDW/h)", yaxs="i")
+
+plot_with_ci_5(simulation_results, 2, x, "Total_C_uptake", col="#C89CE4", add_to_plot = TRUE, lwd=1.2)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- cbind(apply(simulation_results[,,1,"Total_C_uptake"], 2, mean),
+                      apply(simulation_results[,,1,"Total_C_uptake"], 2, sd),
+                      apply(simulation_results[,,2,"Total_C_uptake"], 2, mean),
+                      apply(simulation_results[,,2,"Total_C_uptake"], 2, sd))
+
+colnames(data_to_save) <- c("mean_ace_0", "sd_ace_0", "mean_ace_30", "sd_ace_30")
+rownames(data_to_save) <- glc_vmax/max(glc_vmax)*100
+
+write.csv(data_to_save, "results/SourceData/Figure 2/2D/data_2D.csv", quote=FALSE)
+```
+
+Experimental validation.
+
+```{r Figure_2H, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+# fit polynomial model
+polyfit_no_ace <- polynomial_model(exp_data[filter,], "aMG", "Ctotal", 2, lpred=seq(0,100,by=0.1))
+polyfit_ace <- polynomial_model(exp_data[!filter,], "aMG", "Ctotal", 2, lpred=seq(0,100,by=0.1))
+
+# plot fit and confidence intervals
+plot(polyfit_no_ace$fited_curve_x, polyfit_no_ace$fited_curve_y, ylim=c(0, 60), las=1, yaxs="i", ylab="total carbon uptake (mmol/gDW/h)", xlab="[aMG] (mM)", col="#451E5D", lwd=1.5, type="l")
+lines(polyfit_ace$fited_curve_x, polyfit_ace$fited_curve_y, col="#C89CE4", lwd=1.5)
+#polygon(c(polyfit_no_ace$fited_curve_x, rev(polyfit_no_ace$fited_curve_x)), c(polyfit_no_ace$confidence_intervals[,1], rev(polyfit_no_ace$confidence_intervals[,2])), col=adjustcolor("#451E5D", alpha.f=0.4), border = NA)
+#polygon(c(polyfit_ace$fited_curve_x, rev(polyfit_ace$fited_curve_x)), c(polyfit_ace$confidence_intervals[,1], rev(polyfit_ace$confidence_intervals[,2])), col=adjustcolor("#C89CE4", alpha.f=0.4), border = NA)
+
+# plot experimental data
+points(exp_data$aMG[filter], exp_data$Ctotal[filter], lwd=1.0, pch=21, bg="#451E5D", col="black", cex=1.4)
+points(exp_data$aMG[!filter], exp_data$Ctotal[!filter], pch=22, bg="#C89CE4", col="black", cex=1.4, lwd=1.0)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- exp_data[,c("strain", "carbon_source", "aMG", "ACE", "Ctotal", "source")]
+write.csv(data_to_save, "results/SourceData/Figure 2/2H/data_2H.csv", quote=FALSE)
+```
+
+Total carbon uptake as function of glucose uptake rate.
+
+```{r Figure_2K, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+# fit polynomial model
+polyfit <- polynomial_model(exp_data[filter,], "qGLC", "Ctotal", 1, lpred=seq(0,12,by=0.01))
+
+# plot fit
+plot(polyfit$fited_curve_x, polyfit$fited_curve_y, ylim=c(0, 60), xlim=c(0,12), las=1, yaxs="i", ylab="total carbon uptake (mmol/gDW/h)", xlab="Glucose uptake (mmol/gDW/h)", col="#C45818", lwd=1.5, type="l")
+
+# plot experimental data
+points(exp_data$qGLC[filter], exp_data$Ctotal[filter], lwd=1.0, pch=21, bg="#C45818", col="black", cex=1.4)
+
+polyfit <- polynomial_model(exp_data[!filter,], "qGLC", "Ctotal", 1, lpred=seq(0,15,by=0.01))
+
+lines(polyfit$fited_curve_x, polyfit$fited_curve_y, col="#FEA500", lwd=1.5)
+
+points(exp_data$qGLC[!filter], exp_data$Ctotal[!filter], lwd=1.0, pch=22, bg="#FEA500", col="black", cex=1.4)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- exp_data[,c("strain", "carbon_source", "aMG", "ACE", "Ctotal", "qGLC", "source")]
+write.csv(data_to_save, "results/SourceData/Figure 2/2K/data_2K.csv", quote=FALSE)
+```
+
+Growth rate as function of glucose uptake rate.
+
+```{r Figure_2L, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+# fit polynomial model
+polyfit <- polynomial_model(exp_data[filter,], "qGLC", "mu", 1, lpred=seq(0,12,by=0.01))
+
+# plot fit
+plot(polyfit$fited_curve_x, polyfit$fited_curve_y, ylim=c(0, 0.7), xlim=c(0,12), las=1, yaxs="i", ylab="mu (h-1)", xlab="Glucose uptake (mmol/gDW/h)", col="#C45818", lwd=1.5, type="l")
+
+# plot experimental data
+points(exp_data$qGLC[filter], exp_data$mu[filter], lwd=1.0, pch=21, bg="#C45818", col="black", cex=1.4)
+
+polyfit <- polynomial_model(exp_data[!filter,], "qGLC", "mu", 1, lpred=seq(0,15,by=0.01))
+
+lines(polyfit$fited_curve_x, polyfit$fited_curve_y, col="#FEA500", lwd=1.5)
+
+points(exp_data$qGLC[!filter], exp_data$mu[!filter], lwd=1.0, pch=22, bg="#FEA500", col="black", cex=1.4)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- exp_data[,c("strain", "carbon_source", "aMG", "ACE", "mu", "qGLC", "source")]
+write.csv(data_to_save, "results/SourceData/Figure 2/2L/data_2L.csv", quote=FALSE)
+```
+
+### 4.7. Contribution of acetate to carbon uptake
+
+```{r Figure_2I, fig.width=4, fig.height=3.5, fig.path='results/Figures/', dev=c('png', 'pdf')}
+# fit polynomial model
+polyfit <- polynomial_model(exp_data, "qGLC", "qACE", 2, lpred=seq(0,10,by=0.01))
+
+# note: to avoid a bug on windows platforms when the plotted polygon is bigger than the plot, see https://bugs.r-project.org/show_bug.cgi?id=18219
+#polyfit$confidence_intervals[polyfit$confidence_intervals > 3] <- 3
+#polyfit$confidence_intervals[polyfit$confidence_intervals < -11] <- -11
+# plot fit and confidence intervals
+plot(polyfit$fited_curve_x, polyfit$fited_curve_y, ylim=c(-11, 4), las=1, yaxs="i", ylab="qACE (mmol/gDW/h)", xlab="qGLC (mmol/gDW/h)", col="#BF9000", lwd=1.5, type="l", yaxs="i")
+
+abline(h=0)
+
+#polygon(c(polyfit$fited_curve_x, rev(polyfit$fited_curve_x)), c(polyfit$confidence_intervals[,1], rev(polyfit$confidence_intervals[,2])), col=adjustcolor("#BF9000", alpha.f=0.4), border = NA)
+# plot experimental data
+points(exp_data$qGLC[filter], exp_data$qACE[filter], lwd=1.0, pch=22, bg="#FFE699", col="black", cex=1.4)
+points(exp_data$qGLC[!filter], exp_data$qACE[!filter], lwd=1.0, pch=21, bg="#BF9000", col="black", cex=1.4)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- exp_data[,c("strain", "carbon_source", "qACE", "Ctotal", "source")]
+write.csv(data_to_save, "results/SourceData/Figure 2/2I/data_2I.csv", quote=FALSE)
+```
+
+```{r Figure_2J, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+# fit polynomial model
+polyfit <- polynomial_model(exp_data, "qGLC", "contribution_acetate", 2, lpred=seq(0,10,by=0.01))
+
+# note: to avoid a bug on windows platforms when the plotted polygon is bigger than the plot, see https://bugs.r-project.org/show_bug.cgi?id=18219
+#polyfit$confidence_intervals[polyfit$confidence_intervals > 60] <- 60
+#polyfit$confidence_intervals[polyfit$confidence_intervals < -20] <- -20
+# plot fit and confidence intervals
+plot(polyfit$fited_curve_x, polyfit$fited_curve_y, ylim=c(-20, 60), las=1, yaxs="i", ylab="acetate contribution to C uptake (%)", xlab="qGLC (mmol/gDW/h)", col="#BF9000", lwd=1.5, type="l")
+
+abline(h=0)
+
+#polygon(c(polyfit$fited_curve_x, rev(polyfit$fited_curve_x)), c(polyfit$confidence_intervals[,1], rev(polyfit$confidence_intervals[,2])), col=adjustcolor("#BF9000", alpha.f=0.4), border = NA)
+
+# plot experimental data
+points(exp_data$qGLC[filter], exp_data$contribution_acetate[filter], lwd=1.0, pch=22, bg="#FFE699", col="black", cex=1.4)
+points(exp_data$qGLC[!filter], exp_data$contribution_acetate[!filter], lwd=1.0, pch=21, bg="#BF9000", col="black", cex=1.4)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- exp_data[,c("strain", "carbon_source", "aMG", "qGLC", "contribution_acetate", "source")]
+write.csv(data_to_save, "results/SourceData/Figure 2/2J/data_2J.csv", quote=FALSE)
+```
+
+## 5. Acetate concentration at which the acetate flux reverses as function of glycolytic flux
+
+### 5.1. Run simulations
+
+Load model.
+
+```{r}
+loadModel("model/Millard2020_Ecoli_glc_ace_kinetic_model_sensitivity_analysis.cps")
+
+# remove events and fix concentrations of actate, glucose and biomass
+deleteEvent(getEvents()$key)
+setSpecies(key="Ace_out", type="fixed")
+setSpecies(key="Glc", type="fixed")
+setSpecies(key="X", type="fixed")
+```
+
+Run simulations.
+
+```{r eval=FALSE, include=FALSE}
+# run simulations
+n_glc_steps <- 5
+glc_vmax <- getParameters(key="(glc_upt).V")$value * seq(1, n_glc_steps)/n_glc_steps
+n_step <- 50
+ace_concentration <- 10**seq(-1, 2, length.out = n_step)
+fluxes <- c("Values[v_growth_rate]", "Values[v_glc_uptake]", "Values[v_ace_net]")
+
+# sensitivity analysis
+# run simulations for all sets of parameters
+res_e2 <- array(NA, dim=c(ncol(fit_results$res_par)-1, length(glc_vmax), n_step, length(fluxes)+2), dimnames=list(iter=NULL, glc_vmax=NULL, ace_concentration=NULL, specie=c("ace_concentration", fluxes, "ace_threshold")))
+
+# create progress bar
+pb <- txtProgressBar(min=0, max=ncol(fit_results$res_par)-1, style=3)
+
+for (i in seq(ncol(fit_results$res_par)-1)){
+  rp <- c(fit_results$res_par[,i+1])
+  print(i+1)
+  names(rp) <- fit_results$res_par[,"parameter"]
+  model <- update_params(getCurrentModel(), rp)
+  
+  res_glc_ace_range <- array(NA, dim=c(length(glc_vmax), n_step, length(fluxes)+2), dimnames=list(glc_vmax=NULL, ace_concentration=NULL, specie=c("ace_concentration", fluxes, "ace_threshold")))
+  
+  for (g in seq(n_glc_steps)){
+    
+    setParameters(key="(glc_upt).V", value = glc_vmax[g])
+    applyInitialState()
+    
+    res_ace_range <- matrix(NA, nrow=n_step, ncol=length(fluxes)+2, dimnames=list(r=NULL, c=c("ace_concentration", fluxes, "ace_threshold")))
+    for (j in seq(n_step)){
+      setSpecies(key="Ace_out", initial_concentration=ace_concentration[j])
+      applyInitialState()
+      res_ss <- runSteadyState()
+      res_ace_range[j,] <- c(ace_concentration[j], unlist(res_ss$global_quantities[res_ss$global_quantities$key %in% fluxes, "value"]), NA)
+    }
+    res_ace_range[,"ace_threshold"] <- get_ace_threshold(res_ace_range[,"Values[v_ace_net]"], ace_concentration)
+    res_glc_ace_range[g,,] <- res_ace_range
+  }
+  res_e2[i,,,] <- res_glc_ace_range
+    
+    
+  # update the progress bar
+  setTxtProgressBar(pb, i)
+}
+
+# close progress bar
+close(pb)
+```
+
+Save simulation results for further use.
+
+```{r eval=FALSE, include=FALSE}
+save(res_e2, file = "results/MonteCarloSimulations/mc_sim_2_500.RData")
+```
+
+### 5.2. Acetate concentration threshold
+
+Load pre-calculated simulation results (500 monte carlo iterations).
+
+```{r}
+load("results/MonteCarloSimulations/mc_sim_2_500.RData")
+```
+
+Plot predicted acetate flux as function of acetate concentration for different levels of glycolytic activity.
+
+```{r Figure_3A, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+xlab_main <- c(0.1, 1, 10, 100)
+xlab_sec <- c(seq(0.2, 0.9, by=0.1), seq(2, 9, by=1), seq(20, 90, by=10))
+
+cols <- sequential_hcl(6, "blues3")
+
+plot_with_ci_4(res_e2[,1,,], "ace_concentration", "Values[v_ace_net]", col=cols[1], xaxt='n', las=1, lwd=1.5, xlim=c(0.1,100), ylim=c(-5,5), log="x", xlab="[acetate] (mM)", ylab="growth rate (h-1)")
+abline(h=0)
+for (i in seq(1, 5)){
+  plot_with_ci_4(res_e2[,i,,], "ace_concentration", "Values[v_ace_net]", col=cols[i], add_to_plot=TRUE, lwd=1.5)
+
+}
+axis(side = 1, at = xlab_main, labels = TRUE)
+axis(side = 1, at = xlab_sec, labels = FALSE, tcl=-0.3)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- apply(res_e2[,1,,"ace_concentration"], 2, mean)
+for (i in seq(5)){
+  data_to_save <- cbind(data_to_save,
+                        apply(res_e2[,i,,"Values[v_ace_net]"], 2, mean),
+                        apply(res_e2[,i,,"Values[v_ace_net]"], 2, sd))
+}
+colnames(data_to_save) <- c("ace_concentration",
+                            "qACE_mean_glc=20%", "qACE_sd_glc=20%",
+                            "qACE_mean_glc=40%", "qACE_sd_glc=40%",
+                            "qACE_mean_glc=60%", "qACE_sd_glc=60%",
+                            "qACE_mean_glc=80%", "qACE_sd_glc=80%",
+                            "qACE_mean_glc=100%", "qACE_sd_glc=100%")
+write.csv(data_to_save, "results/SourceData/Figure 3/3A/data_3A.csv", quote=FALSE)
+```
+
+Plot predicted acetate concentration threshold as function of glycolytic activity.
+
+```{r Figure_3B, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+n_glc_steps <- 5
+x <- seq(1, n_glc_steps)/n_glc_steps*100
+
+plot(x, rev(apply(res_e2[,,1,"ace_threshold"], 2, mean)), type="l", axes=FALSE, col="#548235", las=1, lwd=1.2, ylim=c(0,16), xlab="Glycolytic activity (%)", ylab="[Ace]reversal (mM)")
+
+axis(1, at = seq(20,100,by=20), labels = paste(seq(100,20, by=-20)), tick = TRUE)
+axis(2, tick = TRUE, las=1)
+box()
+
+polygon(x=c(x, rev(x)),
+          y=c(rev(apply(res_e2[,,1,"ace_threshold"], 2, mean))+rev(apply(res_e2[,,1,"ace_threshold"], 2, sd)), rev(rev(apply(res_e2[,,1,"ace_threshold"], 2, mean))-rev(apply(res_e2[,,1,"ace_threshold"], 2, sd)))),
+          col=paste("#548235", "55", sep=""), border=NA)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- apply(res_e2[,,1,"ace_threshold"], 2, mean)
+
+for (i in seq(5)){
+  data_to_save <- cbind(data_to_save,
+                        apply(res_e2[,,i,"ace_threshold"], 2, mean),
+                        apply(res_e2[,,i,"ace_threshold"], 2, sd))
+}
+colnames(data_to_save) <- c("glycolytic flux",
+                            "conc_mean_glc=20%", "conc_sd_glc=20%",
+                            "conc_mean_glc=40%", "conc_sd_glc=40%",
+                            "conc_mean_glc=60%", "conc_sd_glc=60%",
+                            "conc_mean_glc=80%", "conc_sd_glc=80%",
+                            "conc_mean_glc=100%", "conc_sd_glc=100%")
+write.csv(data_to_save, "results/SourceData/Figure 3/3B/data_3B.csv", quote=FALSE)
+```
+
+Experimental validation.
+
+```{r Figure_3C, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+# load experimental data
+exp_data <- read.table("data/data_E_coli_K12_MG1655_Figure_3-4.txt", header=TRUE, sep="\t")
+
+# plot acetate flux as function of acetate concentration, at different glycolytic flux (aMG=0, 20, 40 or 100 mM)
+
+  cols <- rev(colorRampPalette(c("#2E75B6", "#D5E3F0"))(4))
+  cols <- hcl.colors(6, "Oslo")
+
+  # empty plot
+  plot(NA, NA, type="p", log="x", xaxt='n', pch=20, las=1, xlim=c(0.1,100), ylim=c(-11,3), xlab="[acetate] (mM)", ylab="acetate flux (mmol/gDW/h)")
+  abline(h=0)
+
+  # aMG = 0 mM
+  filter <- (exp_data[,"aMG"]==0)
+  col <- cols[2]
+  x <- exp_data[filter,"ACE"]
+  y <- exp_data[filter,"qACE"]
+
+  points(x, y, bg=col, col="black", pch=21, lwd=1)
+  # uncomment the following lines to run the fits, here we just plot the fitted curves
+  # note: fitting is not stable, so it might have to be run several times to obtain a correct fit
+  #res_fit <- fit_sigmoid(x, y, par_ini_sigmoid, lower_sigmoid, upper_sigmoid)
+  #lines(seq(0.1,130,length.out=1000), sim_sigmoid(res_fit$par, seq(0.1,130,length.out=1000)), col=col, lwd=2)
+  lines(seq(0.1,130,length.out=1000), sim_sigmoid(c(-0.2460494, -1.5989450, -0.9279984, 6.9209620), seq(0.1,130,length.out=1000)), col=col, lwd=2)
+  
+  # aMG = 20 mM
+  filter <- (exp_data[,"aMG"]==20)
+  col <- cols[3]
+  x <- exp_data[filter,"ACE"]
+  y <- exp_data[filter,"qACE"]
+  
+  points(x, y, bg=col, col="black", pch=22, lwd=1)
+  #res_fit <- fit_sigmoid(x, y, par_ini_sigmoid, lower_sigmoid, upper_sigmoid)
+  #lines(seq(0.1,130,length.out=1000), sim_sigmoid(res_fit$par, seq(0.1,130,length.out=1000)), col=col, lwd=2)
+  lines(seq(0.1,130,length.out=1000), sim_sigmoid(c(-2.454911e-01, -2.840827e+00, 5.006536e+01, 1.000000e+06), seq(0.1,130,length.out=1000)), col=col, lwd=2)
+
+  # aMG = 40 mM
+  filter <- (exp_data[,"aMG"]==40)
+  col <- cols[4]
+  x <- exp_data[filter,"ACE"]
+  y <- exp_data[filter,"qACE"]
+  
+  points(x, y, bg=col, col="black", pch=23, lwd=1)
+  #res_fit <- fit_sigmoid(x, y, par_ini_sigmoid, lower_sigmoid, upper_sigmoid)
+  #lines(seq(0.1,130,length.out=1000), sim_sigmoid(res_fit$par, seq(0.1,130,length.out=1000)), col=col, lwd=2)
+  lines(seq(0.1,130,length.out=1000), sim_sigmoid(c(-0.1506843, -7.0591207, 3.5268378, 18.6152155), seq(0.1,130,length.out=1000)), col=col, lwd=2)
+  
+  # aMG = 100 mM
+  filter <- (exp_data[,"aMG"]==100)
+  col <- cols[5]
+  x <- exp_data[filter,"ACE"]
+  y <- exp_data[filter,"qACE"]
+
+  points(x, y, bg=col, col="black", pch=24, lwd=1)
+  #res_fit <- fit_sigmoid(x, y, par_ini_sigmoid, lower_sigmoid, upper_sigmoid)
+  #lines(seq(0.1,130,length.out=1000), sim_sigmoid(res_fit$par, seq(0.1,130,length.out=1000)), col=col, lwd=2)
+  lines(seq(0.1,130,length.out=1000), sim_sigmoid(c(-0.2395667, -9.8451042, 36.7387431, 64514.4364655), seq(0.1,130,length.out=1000)), col=col, lwd=2)
+  
+  # add axes
+  xlab_main <- c(0.1, 1, 10, 100)
+  xlab_sec <- c(seq(0.2, 0.9, by=0.1), seq(2, 9, by=1), seq(20, 90, by=10))
+  axis(side = 1, at = xlab_main, labels = TRUE)
+  axis(side = 1, at = xlab_sec, labels = FALSE, tcl=-0.3)
+```
+
+Save Source data.
+
+```{r}
+write.csv(exp_data, "results/SourceData/Figure 3/3C/data_3C.csv", quote=FALSE)
+```
+
+Plot experimental acetate concentration threshold as function of glycolytic activity.
+
+```{r Figure_3D, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+v0 <- get_ace_threshold(sim_sigmoid(c(-0.2460494, -1.5989450, -0.9279984, 6.9209620), seq(0.1,130,length.out=1000)),
+                        seq(0.1,130,length.out=1000))
+v20 <- get_ace_threshold(sim_sigmoid(c(-2.454911e-01, -2.840827e+00, 5.006536e+01, 1.000000e+06), seq(0.1,130,length.out=1000)),
+                        seq(0.1,130,length.out=1000))
+v40 <- get_ace_threshold(sim_sigmoid(c(-0.1506843, -7.0591207, 3.5268378, 18.6152155), seq(0.1,130,length.out=1000)),
+                        seq(0.1,130,length.out=1000))
+v100 <- get_ace_threshold(sim_sigmoid(c(-0.2395667, -9.8451042, 36.7387431, 64514.4364655), seq(0.1,130,length.out=1000)),
+                        seq(0.1,130,length.out=1000))
+  
+plot(c(0, 20, 40, 100), c(v0, v20, v40, v100), type="l", col="#548235", las=1, lwd=1.2, ylim=c(0,10), xlab="aMG (mM)", ylab="[Ace] reversal (mM)")
+points(c(0, 20, 40, 100), c(v0,v20,v40,v100), col="#548235", lwd=1.2, pch=20)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- rbind(c(0, 20, 40, 100), c(v0, v20, v40, v100))
+rownames(data_to_save) <- c("aMG", "ace_conc_threshold")
+
+write.csv(exp_data, "results/SourceData/Figure 3/3D/data_3D.csv", quote=FALSE)
+```
+
+## 6. Growth rate on glucose as function of 𝛼MG and acetate concentrations
+
+Model predictions.
+
+```{r Figure_4A, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+xlab_main <- c(0.1, 1, 10, 100)
+xlab_sec <- c(seq(0.2, 0.9, by=0.1), seq(2, 9, by=1), seq(20, 90, by=10))
+
+# growth rate as function of acetate concentration
+
+cols <- sequential_hcl(6, "blues3")
+
+plot_with_ci_4(res_e2[,1,,], "ace_concentration", "Values[v_growth_rate]", col=cols[1], xaxt='n', las=1, lwd=2, xlim=c(0.1,100), ylim=c(0,0.8), log="x", xlab="[acetate] (mM)", ylab="growth rate (h-1)")
+
+plot_with_ci_4(res_e2[,5,,], "ace_concentration", "Values[v_growth_rate]", col=cols[4], add_to_plot=TRUE, lwd=2)
+
+axis(side = 1, at = xlab_main, labels = TRUE)
+axis(side = 1, at = xlab_sec, labels = FALSE, tcl=-0.3)
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- apply(res_e2[,1,,"ace_concentration"], 2, mean)
+for (i in c(1,5)){
+  data_to_save <- cbind(data_to_save,
+                        apply(res_e2[,i,,"Values[v_growth_rate]"], 2, mean),
+                        apply(res_e2[,i,,"Values[v_growth_rate]"], 2, sd))
+}
+colnames(data_to_save) <- c("ace_concentration",
+                            "mu_mean_glc=20%", "mu_sd_glc=20%",
+                            "mu_mean_glc=100%", "mu_sd_glc=100%")
+write.csv(data_to_save, "results/SourceData/Figure 4/4A/data_4A.csv", quote=FALSE)
+```
+
+Plot experimental growth rate as function of acetate concentration at high (0 mM 𝛼MG) or low (100 mM 𝛼MG) glycolytic flux.
+
+```{r Figure_4B, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+# load experimental data
+exp_data <- read.table("data/data_E_coli_K12_MG1655_Figure_3-4.txt", header=TRUE, sep="\t")
+
+# plot growth rate as function of acetate concentration, at high (aMG=0mM) and low (aMG=100mM) glycolytic flux
+
+  cols <- rev(colorRampPalette(c("#2E75B6", "#D5E3F0"))(4))
+  cols <- hcl.colors(6, "Oslo")
+
+  # empty plot
+  plot(NA, NA, type="p", log="x", col=col, xaxt='n', pch=20, las=1, xlim=c(0.1,100), ylim=c(0, 0.7), xlab="[acetate] (mM)", ylab="growth rate (h-1)")
+  
+  # aMG = 0 mM
+  filter <- (exp_data[,"aMG"]==0)
+  col <- cols[2]
+  x <- exp_data[filter,"ACE"]
+  y <- exp_data[filter,"mu"]
+  
+  points(x, y, bg=cols[2], col="black", pch=21, lwd=1)
+  
+  df <- data.frame(x=log10(x), y=y)
+  df <- df[order(df$x),]
+  
+  model <- lm(y~poly(x,3), data = df)
+  #summary(model)
+  range_ace <- seq(min(df$x), max(df$x), len=100)
+  predy <- predict(model, data.frame(x=range_ace))
+  lines(10**range_ace, predy, type="l", col=col, lwd=2)
+  
+  # aMG = 100 mM
+  filter <- (exp_data[,"aMG"]==100)
+  col <- cols[5]
+  x <- exp_data[filter,"ACE"]
+  y <- exp_data[filter,"mu"]
+
+  points(x, y, bg=col, col="black", pch=24, lwd=1)
+  df=data.frame(x=log10(x), y=y)
+  df <- df[order(df$x),]
+  
+  model = lm(y~poly(x,3), data = df)
+  #summary(model)
+  i = seq(min(df$x), max(df$x), len=100)       #  x-values for line
+  predy = predict(model, data.frame(x=i))
+  lines(10**i, predy, type="l", col=col, lwd=2)
+  
+  # add axes
+  xlab_main <- c(0.1, 1, 10, 100)
+  xlab_sec <- c(seq(0.2, 0.9, by=0.1), seq(2, 9, by=1), seq(20, 90, by=10))
+  axis(side = 1, at = xlab_main, labels = TRUE)
+  axis(side = 1, at = xlab_sec, labels = FALSE, tcl=-0.3)
+```
+
+Save Source data.
+
+```{r}
+write.csv(exp_data, "results/SourceData/Figure 4/4B/data_4B.csv", quote=FALSE)
+```
+
+## 7. Impact of acetate on growth of WT and mutant strains
+
+### 7.1. Statistical analyses
+
+Load experimental data.
+
+```{r}
+exp_data <- read.table("data/data_E_coli_K12_BW25113_Figure_6-7.txt", header=TRUE, sep="\t")
+```
+
+The relative change in growth rate is calculated as:
+
+$$\Delta mu = {\mu_{ace=10} - \mu_{ace=0} \over \mu_{ace=0}}$$
+
+For each biological replicate, we inoculated media with and without acetate from the same pre-cultivation, and calculated the change of growth rate between these two growth experiments. We carried out at least three independent biological replicate for each condition and calculated the mean ± standard deviation from these replicates. We performed Student t-tests with a null hypothesis that the ratio between the growth rates with and without acetate is 1.
+
+```{r}
+statistical_results <- array(NA, dim=c(30, 11), dimnames=list(NULL, c("carbon source", "strain", "aMG", "ace", "mu_mean", "mu_sd", "n_replicates", "p-val (vs wt, same ace)", "p-val (vs 0 mM ace, same strain)", "relative growth change", "rgc_sd")))
+
+k <- 0
+# for each carbon source
+for (c_source in unique(exp_data$carbon_source)){
+  # for each strain
+  for (strain in unique(exp_data$genotype)){
+    # for each aMG concentration
+    for (aMG in rev(unique(exp_data[((exp_data$genotype == strain) & (exp_data$carbon_source == c_source)), "aMG"]))){
+      # for each acetate concentration
+      for (ace in unique(exp_data$ACE)){
+        # perform all statistical tests (Student t-tests with two-tailed distributions)
+        # to compare the different strains/conditions, as detailed below
+        k <- k+1
+        mu_strain <- exp_data[((exp_data$genotype == strain) & (exp_data$ACE == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "mu"]
+        mu_mean <- mean(mu_strain)
+        mu_sd <- sd(mu_strain)
+        #cat("**********************************************\n")
+        #cat("Statistical analysis for the following condition:\n")
+        #cat("\nstrain: ", strain, ", carbon source: ", c_source , ", [ace]=", ace, "mM, [aMG]=", aMG, "mM\n", sep="")
+        #cat("**********************************************\n")
+        t_test_factor_strain <- list(p.value=NA)
+        if (strain != "wt"){
+          n_rep_com <- Reduce(intersect, list(exp_data[((exp_data$genotype == "wt") & (exp_data$ACE == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "experiment_number"],
+                                              exp_data[((exp_data$genotype == strain) & (exp_data$ACE == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "experiment_number"]))
+          mu_wt <- exp_data[((exp_data$genotype == "wt") & (exp_data$ACE == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG) & (exp_data$experiment_number %in% n_rep_com)), "mu"]
+          mu_strain <- exp_data[((exp_data$genotype == strain) & (exp_data$ACE == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG) & (exp_data$experiment_number %in% n_rep_com)), "mu"]
+          if ((length(mu_wt) > 1) & (length(mu_strain) > 1)){
+            t_test_factor_strain <- t.test(mu_wt, mu_strain)
+          }
+          
+          #cat("\n\nStatistical test:", paste("\n  wt vs ", strain, ", carbon source: ", c_source , ", [ace]=", ace, "mM\n", sep=""), sep="\n")
+          #cat("\nwt: ", paste(mu_wt, collapse=", "), "\n", sep="")
+          #cat(strain, ": ", paste(mu_strain, collapse=", "), "\n", sep="")
+          #print(t_test_factor_strain)
+        }
+        t_test_factor_ace <- list(p.value=NA)
+        relative_growth_change <- NA
+        relative_growth_change_sd <- NA
+        if (ace == 10){
+          mu_no_ace <- exp_data[((exp_data$genotype == strain) & (exp_data$ACE == 0) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "mu"]
+          mu_ace <- exp_data[((exp_data$genotype == strain) & (exp_data$ACE == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "mu"]
+          relative_growth_change <- mean(mu_ace/mu_no_ace)-1
+          relative_growth_change_sd <- sd(mu_ace/mu_no_ace)
+          # here we compared directly the relative change of growth rate induced by 10 mM acetate
+          t_test_factor_ace <- t.test(mu_ace/mu_no_ace, mu=1)
+          # to compare directly the growth rates in presence and absence of acetate (with paired tests, because for
+          # each strain/carbon source cultivations were carried out in parallel with and without acetate), just
+          # uncomment the following line (results are similar)
+          # t_test_factor_ace <- t.test(mu_ace, mu_no_ace, paired=TRUE)
+          #cat("\n\nStatistical test:", paste("\n  strain: ", strain, ", carbon source: ", c_source , ", [ace]=0 mM vs [ace]=10 mM\n", sep=""), sep="\n")
+          #cat("relative change of growth rates: ", paste(mu_ace/mu_no_ace-1, collapse=", "), "\n", sep="")
+          #print(t_test_factor_ace)
+        }
+        statistical_results[k, ] <- c(c_source, strain, aMG, ace, mu_mean, mu_sd, length(mu_strain), t_test_factor_strain$p.value, t_test_factor_ace$p.value, relative_growth_change, relative_growth_change_sd)
+      }
+    }
+  }
+}
+```
+
+Save results.
+
+```{r}
+write.table(statistical_results,"results/StatisticalResults/Statistical_results_glc_gly_gal.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+### 7.2. Impact of acetate on glucose growth of WT, 𝚫*pgi* and 𝚫*pfkA* strains
+
+Plot relative change in growth rate of the WT strain induced by acetate on glucose.
+
+```{r Figure_4C, fig.height=3.5, fig.path='results/Figures/', fig.width=3, dev=c('png', 'pdf')}
+mask <- (is.element(statistical_results[,"carbon source"], c("glucose"))) & (statistical_results[,"ace"] == "10") & (is.element(statistical_results[,"strain"], c("wt")))
+
+data_to_plot <- as.numeric(statistical_results[mask, "relative growth change"])
+names(data_to_plot) <- statistical_results[mask, "strain"]
+data_sd_to_plot <- as.numeric(statistical_results[mask, "rgc_sd"])
+ze_barplot <- barplot(data_to_plot*100, ylim=c(-10,15), beside=TRUE, legend.text=FALSE, las=1, ylab="relative growth change (%)", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
+axis(side=1,line=0,at=ze_barplot,labels=c("aMG_0", "aMG_100"),mgp=c(0,0.5,0),tck=-0.02)
+box()
+```
+
+Save Source data.
+
+```{r}
+data_to_save <- statistical_results[(statistical_results[,"carbon source"] == "glucose"),]
+
+write.table(data_to_save,"results/SourceData/Figure 4/4C/data_4C.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+Plot relative change in growth rate of the mutant straints induced by acetate on glucose.
+
+```{r Figure_4D, fig.height=3.5, fig.path='results/Figures/', fig.width=3, dev=c('png', 'pdf')}
+mask <- (is.element(statistical_results[,"carbon source"], c("glucose"))) & (statistical_results[,"ace"] == "10") & (is.element(statistical_results[,"strain"], c("delta_pgi", "delta_pfkA")))
+
+data_to_plot <- as.numeric(statistical_results[mask, "relative growth change"])
+names(data_to_plot) <- statistical_results[mask, "strain"]
+data_sd_to_plot <- as.numeric(statistical_results[mask, "rgc_sd"])
+ze_barplot <- barplot(data_to_plot*100, ylim=c(0,150), beside=TRUE, legend.text=FALSE, las=1, ylab="relative growth change (%)", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
+axis(side=1,line=0,at=ze_barplot,labels=c("pfkA", "pgi"),mgp=c(0,0.5,0),tck=-0.02)
+box()
+```
+
+Save Source data.
+
+```{r}
+write.table(data_to_plot,"results/SourceData/Figure 4/4D/data_4D.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+### 7.3. Impact of acetate on glucose growth of WT, 𝚫*pta* and 𝚫*acs* strains
+
+Plot data.
+
+```{r Figure_6, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+mask <- ((is.element(statistical_results[,"carbon source"], c("glucose"))) & (statistical_results[,"ace"] == "10")) & (statistical_results[,"aMG"] == "100") & (is.element(statistical_results[,"strain"], c("wt", "delta_pta", "delta_acs")))
+
+data_to_plot <- as.numeric(statistical_results[mask, "relative growth change"])
+names(data_to_plot) <- statistical_results[mask, "strain"]
+data_sd_to_plot <- as.numeric(statistical_results[mask, "rgc_sd"])
+ze_barplot <- barplot(data_to_plot*100, ylim=c(-10,15), beside=TRUE, legend.text=FALSE, las=1, ylab="relative growth change (%)", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
+axis(side=1,line=0,at=ze_barplot,labels=c("aMG_100_wt","aMG_100_pta","aMG_100_acs"),mgp=c(0,0.5,0),tck=-0.02)
+box()
+```
+
+Save Source data.
+
+```{r}
+mask <- (is.element(exp_data$carbon_source, c("glucose")) & is.element(exp_data$genotype, c("wt", "delta_pta", "delta_acs")))
+
+write.table(exp_data[mask, ],"results/SourceData/Figure 6/data_6.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+### 7.4. Impact of acetate on growth of WT, 𝚫*pta* and 𝚫*acs* strains on glycerol and galactose
+
+Relative change in growth rate on glycerol.
+
+```{r Figure_7A, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+mask <- (is.element(statistical_results[,"carbon source"], c("glycerol"))) & (statistical_results[,"ace"] == "10")
+
+data_to_plot <- as.numeric(statistical_results[mask, "relative growth change"])
+names(data_to_plot) <- statistical_results[mask, "strain"]
+data_sd_to_plot <- as.numeric(statistical_results[mask, "rgc_sd"])
+ze_barplot <- barplot(data_to_plot*100, ylim=c(-10,15), beside=TRUE, legend.text=FALSE, las=1, ylab="relative growth change (%)", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
+axis(side=1,line=0,at=ze_barplot,labels=c("wt", "pta","acs"),mgp=c(0,0.5,0),tck=-0.02)
+box()
+```
+
+Relative change in growth rate on galactose.
+
+```{r Figure_7B, fig.height=3.5, fig.path='results/Figures/', fig.width=4, dev=c('png', 'pdf')}
+mask <- (is.element(statistical_results[,"carbon source"], c("galactose"))) & (statistical_results[,"ace"] == "10")
+
+data_to_plot <- as.numeric(statistical_results[mask, "relative growth change"])
+names(data_to_plot) <- statistical_results[mask, "strain"]
+data_sd_to_plot <- as.numeric(statistical_results[mask, "rgc_sd"])
+ze_barplot <- barplot(data_to_plot*100, ylim=c(-20,60), beside=TRUE, legend.text=FALSE, las=1, ylab="relative growth change (%)", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
+axis(side=1,line=0,at=ze_barplot,labels=c("wt", "pta","acs"),mgp=c(0,0.5,0),tck=-0.02)
+box()
+```
+
+Save Source data.
+
+```{r}
+mask <- (is.element(exp_data$carbon_source, c("galactose", "glycerol")) & is.element(exp_data$genotype, c("wt", "delta_pta", "delta_acs")))
+
+write.table(exp_data[mask, ],"results/SourceData/Figure 7/data_7.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+## 8. Change in pH and impact of acetic acid on growth
+
+### 8.1. Change in pH with sodium acetate
+
+Load experimental data.
+
+```{r}
+exp_data <- read.table("data/data_E_coli_K12_BW25113_Figure_EV1.txt", header=TRUE, sep="\t")
+```
+
+```{r}
+statistical_results <- array(NA, dim=c(8, 6), dimnames=list(NULL, c("carbon source", "strain", "aMG", "ace", "delta_pH_mean", "delta_pH_sd")))
+
+k <- 0
+# for each carbon source
+for (c_source in unique(exp_data$carbon_source)){
+  # for each strain
+  for (strain in unique(exp_data$genotype)){
+    # for each aMG concentration
+    for (aMG in rev(unique(exp_data[((exp_data$genotype == strain) & (exp_data$carbon_source == c_source)), "aMG"]))){
+      # for each acetate concentration
+      for (ace in unique(exp_data$ACE)){
+        # perform all statistical tests (Student t-tests with two-tailed distributions)
+        # to compare the different strains/conditions, as detailed below
+        delta_pH <- exp_data[((exp_data$genotype == strain) & (exp_data$ACE == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "delta_pH"]
+        if (length(delta_pH) > 2){
+        k <- k+1
+        delta_pH_mean <- mean(delta_pH)
+        delta_pH_sd <- sd(delta_pH)
+
+        statistical_results[k, ] <- c(c_source, strain, aMG, ace, delta_pH_mean, delta_pH_sd)
+          
+        }
+      }
+    }
+  }
+}
+```
+
+Save results.
+
+```{r}
+write.table(statistical_results,"results/StatisticalResults/Statistical_results_glc_gly_gal_EV1.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+Plot change in pH.
+
+```{r Figure_EV1, fig.height=4.5, fig.path='results/Figures/', fig.width=6, dev=c('png', 'pdf')}
+data_to_plot <- as.numeric(statistical_results[, "delta_pH_mean"])
+
+names(data_to_plot) <- paste(statistical_results[, "strain"], statistical_results[, "carbon source"], statistical_results[, "ace"], sep="_")
+data_sd_to_plot <- as.numeric(statistical_results[, "delta_pH_sd"])
+ze_barplot <- barplot(data_to_plot, ylim=c(-0.4,0.1), beside=TRUE, legend.text=FALSE, las=1, ylab="change in pH", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot, data_sd_to_plot)
+axis(side=1,line=0,at=ze_barplot,labels=c("glc_aMG", "glc_aMG_ace10", "glc_aMG_ace100", "glc", "gly", "gly_ace", "gal", "gal_ace"),mgp=c(0,0.5,0),tck=-0.02, las=2)
+box()
+```
+
+### 8.2. Change in pH and growth rate with acetic acid as acetate source
+
+Load experimental data.
+
+```{r}
+exp_data <- read.table("data/data_E_coli_K12_BW25113_Figure_EV2.txt", header=TRUE, sep="\t")
+```
+
+```{r}
+statistical_results <- array(NA, dim=c(8, 13), dimnames=list(NULL, c("carbon source", "strain", "aMG", "ace", "mu_mean", "mu_sd", "n_replicates", "p-val (vs wt, same ace)", "p-val (vs 0 mM ace, same strain)", "relative growth change", "rgc_sd", "delta_pH_mean", "delta_pH_sd")))
+
+k <- 0
+# for each carbon source
+for (c_source in unique(exp_data$carbon_source)){
+  # for each strain
+  for (strain in unique(exp_data$genotype)){
+    # for each aMG concentration
+    for (aMG in rev(unique(exp_data[((exp_data$genotype == strain) & (exp_data$carbon_source == c_source)), "aMG"]))){
+      # for each acetate concentration
+      for (ace in unique(exp_data$ACETIC_ACID)){
+        # perform all statistical tests (Student t-tests with two-tailed distributions)
+        # to compare the different strains/conditions, as detailed below
+        k <- k+1
+        mu_strain <- exp_data[((exp_data$genotype == strain) & (exp_data$ACETIC_ACID == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "mu"]
+        mu_mean <- mean(mu_strain)
+        mu_sd <- sd(mu_strain)
+        
+        delta_pH <- exp_data[((exp_data$genotype == strain) & (exp_data$ACETIC_ACID == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "delta_pH"]
+        delta_pH_mean <- mean(delta_pH)
+        delta_pH_sd <- sd(delta_pH)
+        #cat("**********************************************\n")
+        #cat("Statistical analysis for the following condition:\n")
+        #cat("\nstrain: ", strain, ", carbon source: ", c_source , ", [ace]=", ace, "mM, [aMG]=", aMG, "mM\n", sep="")
+        #cat("**********************************************\n")
+        t_test_factor_strain <- list(p.value=NA)
+        if (strain != "wt"){
+          n_rep_com <- Reduce(intersect, list(exp_data[((exp_data$genotype == "wt") & (exp_data$ACETIC_ACID == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "experiment_number"],
+                                              exp_data[((exp_data$genotype == strain) & (exp_data$ACETIC_ACID == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "experiment_number"]))
+          mu_wt <- exp_data[((exp_data$genotype == "wt") & (exp_data$ACETIC_ACID == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG) & (exp_data$experiment_number %in% n_rep_com)), "mu"]
+          mu_strain <- exp_data[((exp_data$genotype == strain) & (exp_data$ACETIC_ACID == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG) & (exp_data$experiment_number %in% n_rep_com)), "mu"]
+          if ((length(mu_wt) > 1) & (length(mu_strain) > 1)){
+            t_test_factor_strain <- t.test(mu_wt, mu_strain)
+          }
+          
+          #cat("\n\nStatistical test:", paste("\n  wt vs ", strain, ", carbon source: ", c_source , ", [ace]=", ace, "mM\n", sep=""), sep="\n")
+          #cat("\nwt: ", paste(mu_wt, collapse=", "), "\n", sep="")
+          #cat(strain, ": ", paste(mu_strain, collapse=", "), "\n", sep="")
+          #print(t_test_factor_strain)
+        }
+        t_test_factor_ace <- list(p.value=NA)
+        relative_growth_change <- NA
+        relative_growth_change_sd <- NA
+        if (ace == 10){
+          
+                    n_rep_com <- Reduce(intersect, list(exp_data[((exp_data$genotype == strain) & (exp_data$ACETIC_ACID == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "experiment_number"],
+                                              exp_data[((exp_data$genotype == strain) & (exp_data$ACETIC_ACID == 0) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG)), "experiment_number"]))
+                    
+                    
+          mu_no_ace <- exp_data[((exp_data$genotype == strain) & (exp_data$ACETIC_ACID == 0) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG) & (exp_data$experiment_number %in% n_rep_com)), "mu"]
+          mu_ace <- exp_data[((exp_data$genotype == strain) & (exp_data$ACETIC_ACID == ace) & (exp_data$carbon_source == c_source) & (exp_data$aMG == aMG) & (exp_data$experiment_number %in% n_rep_com)), "mu"]
+          relative_growth_change <- mean(mu_ace/mu_no_ace)-1
+          relative_growth_change_sd <- sd(mu_ace/mu_no_ace)
+          # here we compared directly the relative change of growth rate induced by 10 mM acetate
+          t_test_factor_ace <- t.test(mu_ace/mu_no_ace, mu=1)
+          # to compare directly the growth rates in presence and absence of acetate (with paired tests, because for
+          # each strain/carbon source cultivations were carried out in parallel with and without acetate), just
+          # uncomment the following line (results are similar)
+          # t_test_factor_ace <- t.test(mu_ace, mu_no_ace, paired=TRUE)
+          #cat("\n\nStatistical test:", paste("\n  strain: ", strain, ", carbon source: ", c_source , ", [ace]=0 mM vs [ace]=10 mM\n", sep=""), sep="\n")
+          #cat("relative change of growth rates: ", paste(mu_ace/mu_no_ace-1, collapse=", "), "\n", sep="")
+          #print(t_test_factor_ace)
+        }
+        statistical_results[k, ] <- c(c_source, strain, aMG, ace, mu_mean, mu_sd, length(mu_strain), t_test_factor_strain$p.value, t_test_factor_ace$p.value, relative_growth_change, relative_growth_change_sd, delta_pH_mean, delta_pH_sd)
+      }
+    }
+  }
+}
+```
+
+Save results.
+
+```{r}
+write.table(statistical_results,"results/StatisticalResults/Statistical_results_glc_gly_gal_EV2.tsv", quote=FALSE, sep="\t", row.names=FALSE)
+```
+
+Plot relative change in growth rate induced by acetate.
+
+```{r Figure_EV2A, fig.height=3.5, fig.path='results/Figures/', fig.width=3, dev=c('png', 'pdf')}
+mask <- (statistical_results[,"ace"] == "10") & (statistical_results[,"carbon source"] == "glucose")
+
+data_to_plot <- as.numeric(statistical_results[mask, "relative growth change"])
+names(data_to_plot) <- statistical_results[mask, "strain"]
+data_sd_to_plot <- as.numeric(statistical_results[mask, "rgc_sd"])
+ze_barplot <- barplot(data_to_plot*100, ylim=c(-5,15), beside=TRUE, legend.text=FALSE, las=1, ylab="relative growth change (%)", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
+axis(side=1,line=0,at=ze_barplot,labels=c("glc_aMG", "glc"),mgp=c(0,0.5,0),tck=-0.02)
+box()
+```
+
+```{r Figure_EV2B, fig.height=3.5, fig.path='results/Figures/', fig.width=2, dev=c('png', 'pdf')}
+mask <- (statistical_results[,"ace"] == "10") & (statistical_results[,"carbon source"] == "glycerol")
+
+data_to_plot <- as.numeric(statistical_results[mask, "relative growth change"])
+names(data_to_plot) <- statistical_results[mask, "strain"]
+data_sd_to_plot <- as.numeric(statistical_results[mask, "rgc_sd"])
+ze_barplot <- barplot(data_to_plot*100, ylim=c(0,10), beside=TRUE, legend.text=FALSE, las=1, ylab="relative growth change (%)", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
+axis(side=1,line=0,at=ze_barplot,labels=c("gly"),mgp=c(0,0.5,0),tck=-0.02)
+box()
+```
+
+```{r Figure_EV2C, fig.height=3.5, fig.path='results/Figures/', fig.width=2, dev=c('png', 'pdf')}
+mask <- (statistical_results[,"ace"] == "10") & (statistical_results[,"carbon source"] == "galactose")
+
+data_to_plot <- as.numeric(statistical_results[mask, "relative growth change"])
+names(data_to_plot) <- statistical_results[mask, "strain"]
+data_sd_to_plot <- as.numeric(statistical_results[mask, "rgc_sd"])
+ze_barplot <- barplot(data_to_plot*100, ylim=c(0,120), beside=TRUE, legend.text=FALSE, las=1, ylab="relative growth change (%)", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot*100, data_sd_to_plot*100)
+axis(side=1,line=0,at=ze_barplot,labels=c("gal"),mgp=c(0,0.5,0),tck=-0.02)
+box()
+```
+
+Plot change in pH.
+
+```{r Figure_EV2D, fig.height=3.5, fig.path='results/Figures/', fig.width=6, dev=c('png', 'pdf')}
+data_to_plot <- as.numeric(statistical_results[, "delta_pH_mean"])
+
+names(data_to_plot) <- paste(statistical_results[, "strain"], statistical_results[, "carbon source"])
+data_sd_to_plot <- as.numeric(statistical_results[, "delta_pH_sd"])
+ze_barplot <- barplot(data_to_plot, ylim=c(-0.4,0.1), beside=TRUE, legend.text=FALSE, las=1, ylab="change in pH", xaxt='n')
+abline(h=0)
+error.bar(ze_barplot, data_to_plot, data_sd_to_plot)
+axis(side=1,line=0,at=ze_barplot,labels=c("glc_aMG", "glc_aMG_ace", "glc", "glc_ace", "gly", "gly_ace", "gal", "gal_ace"),mgp=c(0,0.5,0),tck=-0.02, las=2)
+box()
+```
